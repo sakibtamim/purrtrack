@@ -24,6 +24,7 @@
 
 - [Overview & Architecture](#-overview--architecture)
 - [100% Success Invariants](#-100-success-invariants)
+- [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Multi-Format Reporting Engine](#-multi-format-reporting-engine)
 - [Monorepo Workspace Structure](#-monorepo-workspace-structure)
 - [Prerequisites](#-prerequisites)
@@ -41,13 +42,13 @@ PurrTrack is built as a high-performance **pnpm + Turborepo monorepo**, cleanly 
 
 ```mermaid
 graph TD
-    subgraph Discord Gateway
+    subgraph GATEWAY ["Discord Gateway"]
         GW["Discord Gateway"]
         VOICE["voiceStateUpdate Events"]
         INTERACTION["interactionCreate (Slash Commands)"]
     end
 
-    subgraph apps/bot (Discord Bot Service)
+    subgraph BOT ["apps/bot (Discord Bot Service)"]
         CLIENT["Discord Client (discord.js v14)"]
         TRACKER["Voice Tracking Engine<br/>• 5s Anti-Flap Debounce<br/>• Session State Machine<br/>• Channel Segment Splitter"]
         RECONCILER["Startup Reconciler<br/>• Voice Channel Scanner<br/>• Ghost Session Healer"]
@@ -55,13 +56,13 @@ graph TD
         EXPORTER["Universal Multi-Format Exporter<br/>• Excel (.xlsx)<br/>• PDF Timesheets<br/>• CSV (UTF-8 BOM)<br/>• JSON & Discord Embeds"]
     end
 
-    subgraph packages/db (PostgreSQL Persistence)
+    subgraph DB ["packages/db (PostgreSQL Persistence)"]
         REPOS["Repository Layer (VoiceSessionRepository, GuildSettingsRepository)"]
         DRIZZLE["Drizzle ORM Engine"]
         PG[("PostgreSQL 16 Database<br/>Partial Unique Index Guard")]
     end
 
-    subgraph apps/api (REST Service)
+    subgraph API ["apps/api (REST Service)"]
         FASTIFY["Fastify 5 HTTP Service<br/>Health Check & Web Downloads"]
     end
 
@@ -106,6 +107,33 @@ PurrTrack incorporates battle-tested resilience patterns from enterprise Discord
 
 ---
 
+## 🔒 Role-Based Access Control (RBAC)
+
+PurrTrack enforces strict enterprise permission boundaries:
+
+### 1. Default Hierarchy & Administrators
+* **Top of Management:** The **Discord Server Owner** holds full unconditional authority.
+* **Server Administrators:** Anyone with Discord's native `Administrator` or `Manage Server` (`ManageGuild`) permissions.
+
+### 2. Delegated Management Roles
+Server Admins can designate any role as a **Management Role** (e.g. `@Engineering Manager`, `@Team Lead`, `@HR`):
+```text
+/config role_add role:@Engineering Manager
+```
+
+### 3. Permissions Matrix
+
+| Feature | Regular Team Member | Management Role | Server Admin / Owner |
+| :--- | :---: | :---: | :---: |
+| **`/status` (Self)** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/status target:@other_user`** | ⛔ **Blocked** *(Self-only)* | ✅ Allowed | ✅ Allowed |
+| **`/report user target:@self`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/report user target:@other_user`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
+| **`/report guild` (Server Timesheet)** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
+| **`/config` (Bot Settings & Roles)** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
+
+---
+
 ## 📊 Multi-Format Reporting Engine
 
 Admins and team leads can pull timesheets across any timeframe (**Today**, **Yesterday**, **This Week**, **Last Week**, **This Month**, **Last Month**, **All Time**) in five distinct formats:
@@ -126,7 +154,7 @@ Admins and team leads can pull timesheets across any timeframe (**Today**, **Yes
 purrtrack/
 ├── apps/
 │   ├── bot/                          # Discord Bot Service
-│   │   ├── src/commands/             # /ping, /status, /report (user & guild), /config, /help
+│   │   ├── src/commands/             # /ping, /status, /report, /config, /help
 │   │   ├── src/engine/               # Voice Tracker (5s anti-flap) & Startup Reconciler
 │   │   ├── src/exporters/            # CSV, Excel, PDF, JSON, Discord Embed generators
 │   │   ├── src/core/                 # Graceful exit watchdog, structured logger, announcer
@@ -232,11 +260,13 @@ pnpm dev
 | Command | Subcommand | Arguments | Permission | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `/ping` | — | — | Public | Checks Discord Gateway WebSocket ping, API latency, and responsiveness. |
-| `/status` | — | `[target: Member]` | Public / Admin | Displays real-time live elapsed duration for the current voice session and channel with on-demand self-healing. |
-| `/report` | `user` | `target: Member`, `[format: Format]`, `[range: Range]` | Member (Self) / Admin | Generates a formatted time report for a specific member in Excel, PDF, CSV, JSON, or Embed. |
+| `/status` | — | `[target: Member]` | Self (Public) / Target (Manager) | Displays real-time live elapsed duration for current voice session and channel. Regular members can only view their own status. |
+| `/report` | `user` | `target: Member`, `[format: Format]`, `[range: Range]` | Self (Public) / Target (Manager) | Generates an individual timesheet in Excel, PDF, CSV, JSON, or Embed. Regular members can only view their own report. |
 | `/report` | `guild` | `[format: Format]`, `[range: Range]` | Admin / Manager | Generates an aggregated timesheet and leaderboard across all voice channels for the entire server. |
-| `/config` | `view` | — | Admin | Inspects current server tracking settings (AFK rule, deafened tracking, timezone). |
-| `/config` | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[announce_channel]` | Admin | Updates voice tracking policies and announcement preferences. |
+| `/config` | `view` | — | Admin | Inspects current server tracking settings and designated management roles. |
+| `/config` | `role_add` | `role: Role` | Admin / Owner | Grants Management permissions to a role (allows inspecting other users and pulling server-wide reports). |
+| `/config` | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
+| `/config` | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[announce_channel]` | Admin / Owner | Updates voice tracking policies and announcement preferences. |
 | `/help` | — | — | Public | Displays interactive command guide and feature documentation. |
 
 ---

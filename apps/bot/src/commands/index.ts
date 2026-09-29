@@ -5,7 +5,7 @@ import {
 import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
 import { statusCommand, handleStatusCommand } from './status.js';
 import { reportCommand, handleReportCommand } from './report.js';
-import { configCommand, handleConfigCommand } from './config.js';
+import { configCommand, trackConfigCommand, handleConfigCommand } from './config.js';
 import { helpCommand, handleHelpCommand } from './help.js';
 import { pingCommand, handlePingCommand } from './ping.js';
 import { logger } from '../core/logger.js';
@@ -15,6 +15,7 @@ export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = 
   statusCommand.toJSON(),
   reportCommand.toJSON(),
   configCommand.toJSON(),
+  trackConfigCommand.toJSON(),
   helpCommand.toJSON(),
 ];
 
@@ -41,6 +42,7 @@ export async function dispatchSlashCommand(
         break;
 
       case 'config':
+      case 'track-config':
         await handleConfigCommand(interaction, settingsRepo);
         break;
 

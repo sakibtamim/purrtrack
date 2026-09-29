@@ -130,7 +130,8 @@ Server Admins can designate any role as a **Management Role** (e.g. `@Engineerin
 | **`/report user target:@self`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/report user target:@other_user`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
 | **`/report guild` (Server Timesheet)** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
-| **`/config` (Bot Settings & Roles)** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
+| **`/track-config view`** *(or `/config view`)* | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
+| **`/track-config set / role_add`** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
 
 ---
 
@@ -263,10 +264,10 @@ pnpm dev
 | `/status` | — | `[target: Member]` | Self (Public) / Target (Manager) | Displays real-time live elapsed duration for current voice session and channel. Regular members can only view their own status. |
 | `/report` | `user` | `target: Member`, `[format: Format]`, `[range: Range]` | Self (Public) / Target (Manager) | Generates an individual timesheet in Excel, PDF, CSV, JSON, or Embed. Regular members can only view their own report. |
 | `/report` | `guild` | `[format: Format]`, `[range: Range]` | Admin / Manager | Generates an aggregated timesheet and leaderboard across all voice channels for the entire server. |
-| `/config` | `view` | — | Admin | Inspects current server tracking settings and designated management roles. |
-| `/config` | `role_add` | `role: Role` | Admin / Owner | Grants Management permissions to a role (allows inspecting other users and pulling server-wide reports). |
-| `/config` | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
-| `/config` | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[announce_channel]` | Admin / Owner | Updates voice tracking policies and announcement preferences. |
+| `/config` *(or `/track-config`)* | `view` | — | Admin / Manager | Inspects current server tracking settings and designated management roles. |
+| `/config` *(or `/track-config`)* | `role_add` | `role: Role` | Admin / Owner | Grants Management permissions to a role (allows inspecting other users and pulling server-wide reports). |
+| `/config` *(or `/track-config`)* | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
+| `/config` *(or `/track-config`)* | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[announce_channel]` | Admin / Owner | Updates voice tracking policies and announcement preferences. Use `/track-config` to guarantee no command clash with other bots in the server. |
 | `/help` | — | — | Public | Displays interactive command guide and feature documentation. |
 
 ---

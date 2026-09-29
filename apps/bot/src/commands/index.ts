@@ -7,9 +7,11 @@ import { statusCommand, handleStatusCommand } from './status.js';
 import { reportCommand, handleReportCommand } from './report.js';
 import { configCommand, handleConfigCommand } from './config.js';
 import { helpCommand, handleHelpCommand } from './help.js';
+import { pingCommand, handlePingCommand } from './ping.js';
 import { logger } from '../core/logger.js';
 
 export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
+  pingCommand.toJSON(),
   statusCommand.toJSON(),
   reportCommand.toJSON(),
   configCommand.toJSON(),
@@ -21,10 +23,15 @@ export async function dispatchSlashCommand(
   sessionRepo: VoiceSessionRepository,
   settingsRepo: GuildSettingsRepository
 ): Promise<void> {
-  const { commandName } = interaction;
+  const { commandName, user } = interaction;
+  logger.info(`⚡ [commands] /${commandName} invoked by @${user.username} (${user.id}) in guild ${interaction.guildId}`);
 
   try {
     switch (commandName) {
+      case 'ping':
+        await handlePingCommand(interaction);
+        break;
+
       case 'status':
         await handleStatusCommand(interaction, sessionRepo);
         break;
@@ -42,7 +49,7 @@ export async function dispatchSlashCommand(
         break;
 
       default:
-        logger.warn(`[commands] Unhandled command: ${commandName}`);
+        logger.warn(`[commands] Unhandled command: /${commandName}`);
         await interaction.reply({ content: `Unknown command: /${commandName}`, ephemeral: true });
     }
   } catch (error) {

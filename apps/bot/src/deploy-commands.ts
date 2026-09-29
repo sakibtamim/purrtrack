@@ -4,7 +4,6 @@ import { env, getEnv } from './config/env.js';
 import { logger } from './core/logger.js';
 
 async function deployCommands(): Promise<void> {
-  // Validate env
   getEnv();
 
   const token = env.DISCORD_BOT_TOKEN;
@@ -20,22 +19,23 @@ async function deployCommands(): Promise<void> {
 
   try {
     if (guildId) {
-      logger.info(`🚀 Deploying ${slashCommands.length} commands to guild ${guildId} (Instant development update)...`);
+      logger.info(`🚀 Deploying ${slashCommands.length} commands to guild ${guildId} (Instant server update)...`);
       const data = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
         body: slashCommands,
       })) as any[];
 
-      logger.info(`✅ Successfully registered ${data.length} commands for guild ${guildId}:`);
-      data.forEach((cmd) => logger.info(`   - /${cmd.name}`));
-    } else {
-      logger.info(`🚀 Deploying ${slashCommands.length} global commands across all Discord guilds...`);
-      const data = (await rest.put(Routes.applicationCommands(clientId), {
-        body: slashCommands,
-      })) as any[];
-
-      logger.info(`✅ Successfully registered ${data.length} global commands:`);
+      logger.info(`✅ Successfully registered ${data.length} guild commands for server ${guildId}:`);
       data.forEach((cmd) => logger.info(`   - /${cmd.name}`));
     }
+
+    // Also deploy globally
+    logger.info(`🌍 Deploying ${slashCommands.length} global commands across all servers...`);
+    const globalData = (await rest.put(Routes.applicationCommands(clientId), {
+      body: slashCommands,
+    })) as any[];
+    logger.info(`✅ Successfully registered ${globalData.length} global commands:`);
+    globalData.forEach((cmd) => logger.info(`   - /${cmd.name}`));
+
   } catch (error) {
     logger.error('❌ Failed to deploy commands:', error);
     process.exit(1);

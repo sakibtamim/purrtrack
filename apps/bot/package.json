@@ -1,0 +1,30 @@
+{
+  "name": "@purrtrack/bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "deploy:commands": "tsx src/deploy-commands.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@purrtrack/db": "workspace:*",
+    "@purrtrack/shared": "workspace:*",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "fast-csv": "^5.0.2",
+    "pdfkit": "^0.16.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "@types/pdfkit": "^0.13.9",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

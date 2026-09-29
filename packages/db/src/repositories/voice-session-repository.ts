@@ -376,8 +376,13 @@ export class VoiceSessionRepository {
     const userMap = new Map<string, { username: string; displayName?: string; duration: number; count: number }>();
     const sessionItems = [];
 
+    const now = new Date();
+
     for (const row of rows) {
-      const duration = row.durationSeconds || 0;
+      const isLive = row.status === "ACTIVE" || row.durationSeconds === null;
+      const duration = isLive
+        ? Math.max(0, Math.floor((now.getTime() - new Date(row.startedAt).getTime()) / 1000))
+        : (row.durationSeconds || 0);
       totalDurationSeconds += duration;
 
       const chId = row.channelId || 'unknown';
@@ -402,7 +407,7 @@ export class VoiceSessionRepository {
         channelId: chId,
         channelName: chName,
         startedAt: new Date(row.startedAt),
-        endedAt: row.endedAt ? new Date(row.endedAt) : new Date(),
+        endedAt: isLive ? now : (row.endedAt ? new Date(row.endedAt) : now),
         durationSeconds: duration,
         durationFormatted: formatDuration(duration),
         status: row.status,

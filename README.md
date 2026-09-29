@@ -13,7 +13,7 @@
 [![Turborepo](https://img.shields.io/badge/Turborepo-2.3-EF4444?logo=turborepo&logoColor=white)](https://turbo.build/)
 
 <p align="center">
-  <b>Clockify for Discord</b> — PurrTrack automatically tracks, logs, and analyzes voice channel activity across your Discord servers without requiring manual clock-in/out commands. Admins can export rich timesheets and executive summaries across any timeframe in <b>Excel (.xlsx)</b>, <b>PDF</b>, <b>CSV</b>, <b>JSON</b>, or native <b>Discord Embeds</b>.
+  <b>TimeTrack for Discord</b> — PurrTrack automatically tracks, logs, and analyzes voice channel activity across your Discord servers without requiring manual clock-in/out commands. Admins can export rich timesheets and executive summaries across any timeframe in <b>Excel (.xlsx)</b>, <b>PDF</b>, <b>CSV</b>, <b>JSON</b>, or native <b>Discord Embeds</b>.
 </p>
 
 </div>
@@ -109,7 +109,7 @@ Admins and team leads can pull timesheets across any timeframe (**Today**, **Yes
 | Format | Technology | Features |
 | :--- | :--- | :--- |
 | **Excel (.xlsx)** | `exceljs` | Multi-tab workbook: Executive Summary tab with styled KPI cards (`Total Hours`, `Top Channels`, `Top Contributors`), auto-filter session table, zebra striping, duration formatted as `[h]:mm:ss`, and automatic `=SUM()` formulas. |
-| **PDF** | `pdfkit` | Polished Clockify-style timesheet report with branding banner, executive metrics boxes, alternating shaded data rows, page numbers, and generation timestamp. |
+| **PDF** | `pdfkit` | Polished TimeTrack-style timesheet report with branding banner, executive metrics boxes, alternating shaded data rows, page numbers, and generation timestamp. |
 | **CSV** | `fast-csv` | Standard RFC 4180 CSV export with **UTF-8 BOM (`\uFEFF`)** so Microsoft Excel and Google Sheets parse special characters and timestamps flawlessly. |
 | **Discord Embed** | `discord.js` | Native in-chat interactive embed with top 5 voice channels, top team contributors, total hours breakdown, and recent sessions list. |
 | **JSON** | Native | Machine-readable structured payload conforming strictly to `@purrtrack/shared` DTOs. |

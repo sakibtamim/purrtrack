@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { AggregatedReportData } from '@purrtrack/shared';
 
 /**
- * Generates an executive Clockify-style PDF timesheet report.
+ * Generates an executive TimeTrack-style PDF timesheet report.
  */
 export async function generatePdfReport(data: AggregatedReportData): Promise<Buffer> {
   return new Promise((resolve, reject) => {

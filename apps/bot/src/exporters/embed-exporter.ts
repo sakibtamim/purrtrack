@@ -38,7 +38,10 @@ export function generateDiscordEmbed(data: AggregatedReportData): EmbedBuilder {
   if (data.sessions.length > 0) {
     const recentList = data.sessions
       .slice(0, 5)
-      .map((s) => `• **${s.displayName || s.username}** in **#${s.channelName}**: \`${s.durationFormatted}\``)
+      .map((s) => {
+        const liveIndicator = s.status === 'ACTIVE' ? ' 🟢 *(Live)*' : '';
+        return `• **${s.displayName || s.username}** in **#${s.channelName}**: \`${s.durationFormatted}\`${liveIndicator}`;
+      })
       .join('\n');
     embed.addFields({
       name: `⏱️ Recent Sessions (${Math.min(5, data.sessions.length)} of ${data.sessions.length})`,
@@ -47,6 +50,6 @@ export function generateDiscordEmbed(data: AggregatedReportData): EmbedBuilder {
     });
   }
 
-  embed.setFooter({ text: 'PurrTrack • Clockify for Discord' }).setTimestamp();
+  embed.setFooter({ text: 'PurrTrack • TimeTrack for Discord' }).setTimestamp();
   return embed;
 }

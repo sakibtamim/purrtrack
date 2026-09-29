@@ -7,7 +7,7 @@ export const helpCommand = new SlashCommandBuilder()
 export async function handleHelpCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle('🐱 PurrTrack • Clockify for Discord')
+    .setTitle('🐱 PurrTrack • TimeTrack for Discord')
     .setDescription(
       'PurrTrack automatically logs your time whenever you connect to a voice channel. ' +
       'No manual check-ins needed!'

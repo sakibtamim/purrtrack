@@ -18,22 +18,26 @@ async function deployCommands(): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(token);
 
   try {
-    // 1. If guildId is specified, clear any duplicate guild-specific commands
-    // Discord displays both Guild & Global commands simultaneously in that server if both are registered!
     if (guildId) {
-      logger.info(`🧹 Clearing guild-specific commands for server ${guildId} to prevent duplicates...`);
-      await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] });
-      logger.info(`✅ Cleared guild-level duplicate commands for ${guildId}.`);
+      logger.info(`🏰 Deploying ${slashCommands.length} commands to guild ${guildId} (Instant propagation)...`);
+      const guildData = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+        body: slashCommands,
+      })) as any[];
+
+      logger.info(`🧹 Clearing global commands to prevent double commands in guild...`);
+      await rest.put(Routes.applicationCommands(clientId), { body: [] });
+
+      logger.info(`✅ Successfully registered ${guildData.length} guild commands instantly:`);
+      guildData.forEach((cmd) => logger.info(`   - /${cmd.name}`));
+    } else {
+      logger.info(`🌍 Deploying ${slashCommands.length} global commands...`);
+      const globalData = (await rest.put(Routes.applicationCommands(clientId), {
+        body: slashCommands,
+      })) as any[];
+
+      logger.info(`✅ Successfully registered ${globalData.length} global commands:`);
+      globalData.forEach((cmd) => logger.info(`   - /${cmd.name}`));
     }
-
-    // 2. Deploy single source of truth: Global commands
-    logger.info(`🌍 Deploying ${slashCommands.length} global commands...`);
-    const globalData = (await rest.put(Routes.applicationCommands(clientId), {
-      body: slashCommands,
-    })) as any[];
-
-    logger.info(`✅ Successfully registered ${globalData.length} global commands:`);
-    globalData.forEach((cmd) => logger.info(`   - /${cmd.name}`));
 
   } catch (error) {
     logger.error('❌ Failed to deploy commands:', error);

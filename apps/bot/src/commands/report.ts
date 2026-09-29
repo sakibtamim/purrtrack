@@ -123,6 +123,35 @@ export async function handleReportCommand(
   await interaction.deferReply({ ephemeral: format === ExportFormat.EMBED ? false : true });
 
   try {
+    // Self-Healing: Ensure all members currently in voice channels have active sessions
+    if (settings.trackingEnabled) {
+      for (const voiceState of guild.voiceStates.cache.values()) {
+        if (!voiceState.channelId) continue;
+        const isAfk = settings.excludeAfk && guild.afkChannelId && voiceState.channelId === guild.afkChannelId;
+        const isIgnored = settings.ignoredChannelIds && settings.ignoredChannelIds.includes(voiceState.channelId);
+        if (isAfk || isIgnored) continue;
+
+        const userSession = await sessionRepo.getActiveSession(guild.id, voiceState.id);
+        if (!userSession) {
+          let channel = voiceState.channel;
+          if (!channel && guild.channels?.fetch) {
+            channel = (await guild.channels.fetch(voiceState.channelId).catch(() => null)) as any;
+          }
+          const channelName = channel?.name ?? `voice-${voiceState.channelId}`;
+          await sessionRepo.upsertChannel(voiceState.channelId, guild.id, channelName, false);
+          await sessionRepo.startSession({
+            guildId: guild.id,
+            userId: voiceState.id,
+            channelId: voiceState.channelId,
+            channelName,
+            wasMuted: voiceState.selfMute || voiceState.serverMute || false,
+            wasDeafened: voiceState.selfDeaf || voiceState.serverDeaf || false,
+            wasStreaming: voiceState.streaming || false,
+          });
+        }
+      }
+    }
+
     const { startDate, endDate } = resolveTimeRange(preset);
 
     const reportData = await sessionRepo.getAggregatedReport({

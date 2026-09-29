@@ -2,7 +2,6 @@ import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
   EmbedBuilder,
-  GuildMember,
 } from 'discord.js';
 import { VoiceSessionRepository } from '@purrtrack/db';
 import { formatDuration } from '@purrtrack/shared';
@@ -30,7 +29,27 @@ export async function handleStatusCommand(
   const targetUser = interaction.options.getUser('target') || interaction.user;
   const member = await guild.members.fetch(targetUser.id).catch(() => null);
 
-  const activeSession = await sessionRepo.getActiveSession(guild.id, targetUser.id);
+  let activeSession = await sessionRepo.getActiveSession(guild.id, targetUser.id);
+
+  // Self-Healing Invariant: if member is physically in a voice channel, ensure tracking is active
+  if (!activeSession && member?.voice?.channel) {
+    const channel = member.voice.channel;
+    const isAfk = guild.afkChannelId ? channel.id === guild.afkChannelId : false;
+
+    if (!isAfk) {
+      await sessionRepo.upsertChannel(channel.id, guild.id, channel.name, false);
+      const startResult = await sessionRepo.startSession({
+        guildId: guild.id,
+        userId: targetUser.id,
+        channelId: channel.id,
+        channelName: channel.name,
+        wasMuted: member.voice.selfMute || member.voice.serverMute || false,
+        wasDeafened: member.voice.selfDeaf || member.voice.serverDeaf || false,
+        wasStreaming: member.voice.streaming || false,
+      });
+      activeSession = startResult.session;
+    }
+  }
 
   if (!activeSession) {
     await interaction.reply({
@@ -58,7 +77,7 @@ export async function handleStatusCommand(
       { name: 'Current Channel Duration', value: `\`${formatDuration(segmentElapsedSeconds)}\``, inline: true },
       { name: 'Started At (UTC)', value: new Date(activeSession.startedAt).toUTCString(), inline: false }
     )
-    .setFooter({ text: 'PurrTrack • Fully Automatic Time Tracking' })
+    .setFooter({ text: 'PurrTrack • TimeTrack for Discord' })
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed], ephemeral: true });

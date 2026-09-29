@@ -303,6 +303,11 @@ export class VoiceSessionRepository {
     let healedCount = 0;
 
     for (const session of allActive) {
+      // Guard: Only heal sessions for guilds explicitly audited in the active map!
+      if (!activeConnectedUsersByGuild.has(session.guildId)) {
+        continue;
+      }
+
       const guildVoiceUsers = activeConnectedUsersByGuild.get(session.guildId);
       const isStillConnected = guildVoiceUsers && guildVoiceUsers.has(session.userId);
 

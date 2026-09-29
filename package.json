@@ -1,0 +1,32 @@
+{
+  "name": "@purrfectsoft/purrtrack-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:bot": "pnpm --filter @purrtrack/bot dev",
+    "dev:api": "pnpm --filter @purrtrack/api dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy:commands": "pnpm --filter @purrtrack/bot deploy:commands",
+    "db:generate": "pnpm --filter @purrtrack/db db:generate",
+    "db:migrate": "pnpm --filter @purrtrack/db db:migrate",
+    "db:push": "pnpm --filter @purrtrack/db db:push",
+    "db:studio": "pnpm --filter @purrtrack/db db:studio"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.3",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.9"
+}

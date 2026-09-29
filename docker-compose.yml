@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: purrtrack-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: purrtrack
+      POSTGRES_PASSWORD: purrtrack_password
+      POSTGRES_DB: purrtrack
+    ports:
+      - "5438:5432"
+    volumes:
+      - purrtrack_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U purrtrack -d purrtrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  purrtrack_pgdata:

@@ -18,21 +18,20 @@ async function deployCommands(): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(token);
 
   try {
+    // 1. If guildId is specified, clear any duplicate guild-specific commands
+    // Discord displays both Guild & Global commands simultaneously in that server if both are registered!
     if (guildId) {
-      logger.info(`🚀 Deploying ${slashCommands.length} commands to guild ${guildId} (Instant server update)...`);
-      const data = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-        body: slashCommands,
-      })) as any[];
-
-      logger.info(`✅ Successfully registered ${data.length} guild commands for server ${guildId}:`);
-      data.forEach((cmd) => logger.info(`   - /${cmd.name}`));
+      logger.info(`🧹 Clearing guild-specific commands for server ${guildId} to prevent duplicates...`);
+      await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] });
+      logger.info(`✅ Cleared guild-level duplicate commands for ${guildId}.`);
     }
 
-    // Also deploy globally
-    logger.info(`🌍 Deploying ${slashCommands.length} global commands across all servers...`);
+    // 2. Deploy single source of truth: Global commands
+    logger.info(`🌍 Deploying ${slashCommands.length} global commands...`);
     const globalData = (await rest.put(Routes.applicationCommands(clientId), {
       body: slashCommands,
     })) as any[];
+
     logger.info(`✅ Successfully registered ${globalData.length} global commands:`);
     globalData.forEach((cmd) => logger.info(`   - /${cmd.name}`));
 

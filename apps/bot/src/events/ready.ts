@@ -31,5 +31,27 @@ export function registerReady(
 
     // Send startup announcement (if configured)
     await sendStartupAnnouncement(client);
+
+    const guildNames = readyClient.guilds.cache.map(g => `${g.name} (${g.id})`).join('\n║    • ') || 'None';
+
+    console.log(`
+╔═══════════════════════════════════════════════════════════════════════╗
+║                   🐾 PURRTRACK IS ACTIVE & READY 🐾                  ║
+╠═══════════════════════════════════════════════════════════════════════╣
+║  • Status: Online & actively tracking voice channels                  ║
+║  • Bot Tag: ${readyClient.user.tag}
+║  • Connected Guild(s):                                                ║
+║    • ${guildNames}
+╠═══════════════════════════════════════════════════════════════════════╣
+║  ⚡ Ready for Discord Actions:                                        ║
+║    1. Join any voice channel -> Auto-starts time tracking session     ║
+║    2. Disconnect from voice  -> Finalizes session (with 5s anti-flap) ║
+║    3. In chat, test commands:                                         ║
+║       • /ping   - Verify latency & gateway responsiveness             ║
+║       • /status - Check active time tracking session                  ║
+║       • /report - Export Excel, PDF, CSV, or JSON timesheet           ║
+║       • /help   - Display command instructions                        ║
+╚═══════════════════════════════════════════════════════════════════════╝
+`);
   });
 }

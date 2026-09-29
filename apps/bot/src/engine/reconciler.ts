@@ -22,45 +22,52 @@ export class StartupReconciler {
 
       try {
         // Fetch fresh channels
-        const channels = await guild.channels.fetch();
+        await guild.channels.fetch().catch(() => null);
 
-        for (const channel of channels.values()) {
-          if (channel && channel.isVoiceBased()) {
-            // Find all non-bot members currently in voice
-            const members = channel.members.filter((m) => !m.user.bot);
+        // Iterate through all cached voice states in the guild
+        for (const voiceState of guild.voiceStates.cache.values()) {
+          const channelId = voiceState.channelId;
+          if (!channelId) continue;
 
-            for (const member of members.values()) {
-              activeUsersInGuild.add(member.user.id);
+          const userId = voiceState.id;
+          let member = voiceState.member;
+          if (!member && guild.members?.fetch) {
+            member = await guild.members.fetch(userId).catch(() => null);
+          }
+          if (member?.user?.bot) continue;
 
-              // Update user record
-              await this.sessionRepo.upsertUser(
-                member.user.id,
-                member.user.username,
-                member.user.globalName || member.displayName,
-                member.user.displayAvatarURL()
-              );
+          activeUsersInGuild.add(userId);
 
-              // Ensure channel is registered
-              await this.sessionRepo.upsertChannel(channel.id, guild.id, channel.name, channel.id === guild.afkChannelId);
+          const username = member?.user?.username ?? `user_${userId}`;
+          const globalName = member?.user?.globalName ?? member?.displayName ?? username;
+          const avatarUrl = member?.user?.displayAvatarURL ? member.user.displayAvatarURL() : null;
 
-              // Check if member already has an active session in DB
-              const activeSession = await this.sessionRepo.getActiveSession(guild.id, member.user.id);
-              if (!activeSession) {
-                // Resume/initiate session for connected member
-                logger.info(`✨ [reconciler] Discovered untracked member ${member.user.username} in ${channel.name}. Starting session.`);
-                await this.sessionRepo.startSession({
-                  guildId: guild.id,
-                  userId: member.user.id,
-                  channelId: channel.id,
-                  channelName: channel.name,
-                  startedAt: restartTimestamp,
-                  wasMuted: member.voice.selfMute || member.voice.serverMute || false,
-                  wasDeafened: member.voice.selfDeaf || member.voice.serverDeaf || false,
-                  wasStreaming: member.voice.streaming || false,
-                });
-                resumedCount++;
-              }
-            }
+          await this.sessionRepo.upsertUser(userId, username, globalName, avatarUrl ?? undefined);
+
+          let channel = voiceState.channel;
+          if (!channel && guild.channels?.fetch) {
+            channel = (await guild.channels.fetch(channelId).catch(() => null)) as any;
+          }
+          const channelName = channel?.name ?? `voice-${channelId}`;
+          const isAfk = guild.afkChannelId ? channelId === guild.afkChannelId : false;
+
+          await this.sessionRepo.upsertChannel(channelId, guild.id, channelName, isAfk);
+
+          // Check if member already has an active session in DB
+          const activeSession = await this.sessionRepo.getActiveSession(guild.id, userId);
+          if (!activeSession) {
+            logger.info(`✨ [reconciler] Discovered untracked member @${username} in #${channelName}. Starting session.`);
+            await this.sessionRepo.startSession({
+              guildId: guild.id,
+              userId,
+              channelId,
+              channelName,
+              startedAt: restartTimestamp,
+              wasMuted: voiceState.selfMute || voiceState.serverMute || false,
+              wasDeafened: voiceState.selfDeaf || voiceState.serverDeaf || false,
+              wasStreaming: voiceState.streaming || false,
+            });
+            resumedCount++;
           }
         }
       } catch (err) {

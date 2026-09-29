@@ -8,6 +8,7 @@ interface PendingLeave {
   leaveTime: Date;
   guildId: string;
   userId: string;
+  username: string;
 }
 
 export class VoiceTracker {
@@ -28,23 +29,40 @@ export class VoiceTracker {
    * Main entry point for voiceStateUpdate events
    */
   async handleVoiceStateUpdate(oldState: VoiceState, newState: VoiceState): Promise<void> {
-    const member = newState.member || oldState.member;
-    if (!member || member.user.bot) {
-      // Rule: Ignore all bot accounts!
+    const guild = newState.guild || oldState.guild;
+    const guildId = guild?.id;
+    if (!guildId) return;
+
+    // Resolve member & user ID (supports both discord.js VoiceState and unit-test mocks)
+    let member = newState.member || oldState.member;
+    const userId = newState.id || oldState.id || member?.user?.id;
+    if (!userId) return;
+
+    // Fetch member from API if un-cached
+    if (!member && guild.members?.fetch) {
+      member = await guild.members.fetch(userId).catch(() => null);
+    }
+
+    // Ignore bot accounts
+    if (member?.user?.bot) {
       return;
     }
 
-    const guildId = newState.guild.id || oldState.guild.id;
-    const userId = member.user.id;
+    if (!member) {
+      const client = newState.client || oldState.client;
+      if (client?.users?.fetch) {
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (!user || user.bot) return;
+      }
+    }
+
+    const username = member?.user?.username ?? `user_${userId}`;
+    const globalName = member?.user?.globalName ?? member?.displayName ?? username;
+    const avatarUrl = member?.user?.displayAvatarURL ? member.user.displayAvatarURL() : undefined;
     const key = this.getKey(guildId, userId);
 
     // Update user record in directory
-    await this.sessionRepo.upsertUser(
-      userId,
-      member.user.username,
-      member.user.globalName || member.displayName,
-      member.user.displayAvatarURL()
-    );
+    await this.sessionRepo.upsertUser(userId, username, globalName, avatarUrl);
 
     // Fetch guild tracking configuration
     const settings = await this.settingsRepo.getSettings(guildId);
@@ -56,77 +74,93 @@ export class VoiceTracker {
     const newChannelId = newState.channelId;
 
     // Helper to test if a channel is ignored (e.g., AFK or explicit blacklist)
-    const isChannelIgnored = (channel: VoiceState['channel']): boolean => {
-      if (!channel) return true;
-      if (settings.excludeAfk && channel.id === newState.guild.afkChannelId) {
+    const isChannelIgnored = (channelId: string | null): boolean => {
+      if (!channelId) return true;
+      if (settings.excludeAfk && guild.afkChannelId && channelId === guild.afkChannelId) {
         return true;
       }
-      if (settings.ignoredChannelIds && settings.ignoredChannelIds.includes(channel.id)) {
+      if (settings.ignoredChannelIds && settings.ignoredChannelIds.includes(channelId)) {
         return true;
       }
       return false;
     };
 
-    const isOldIgnored = isChannelIgnored(oldState.channel);
-    const isNewIgnored = isChannelIgnored(newState.channel);
+    const isOldIgnored = isChannelIgnored(oldChannelId);
+    const isNewIgnored = isChannelIgnored(newChannelId);
 
     // Event 1: User joined voice from disconnected (or joined from ignored channel)
     if ((!oldChannelId || isOldIgnored) && newChannelId && !isNewIgnored) {
-      await this.handleJoin(guildId, userId, newState, key);
+      await this.handleJoin(guild, guildId, userId, username, newState, key);
       return;
     }
 
     // Event 2: User disconnected from voice (or moved to ignored/AFK channel)
     if (oldChannelId && !isOldIgnored && (!newChannelId || isNewIgnored)) {
-      await this.handleLeave(guildId, userId, key);
+      await this.handleLeave(guildId, userId, username, key);
       return;
     }
 
     // Event 3: User switched between two valid tracked channels
     if (oldChannelId && newChannelId && oldChannelId !== newChannelId && !isOldIgnored && !isNewIgnored) {
-      await this.handleSwitch(guildId, userId, newState, key);
+      await this.handleSwitch(guild, guildId, userId, username, newState, key);
       return;
     }
 
     // Event 4: In-channel state change (mute, deafen, stream)
     if (oldChannelId && newChannelId && oldChannelId === newChannelId && !isNewIgnored) {
-      // In-channel status update (e.g., mute / deafen / stream toggle)
-      logger.debug(`[tracker] State toggle in channel ${newChannelId} for user ${userId}`);
+      logger.debug(`[tracker] State toggle in channel ${newChannelId} for user ${username} (${userId})`);
     }
   }
 
-  private async handleJoin(guildId: string, userId: string, state: VoiceState, key: string): Promise<void> {
-    const channel = state.channel!;
+  private async handleJoin(
+    guild: any,
+    guildId: string,
+    userId: string,
+    username: string,
+    state: VoiceState,
+    key: string
+  ): Promise<void> {
+    const channelId = state.channelId!;
+    let channel = state.channel;
+    if (!channel && guild.channels?.fetch) {
+      channel = (await guild.channels.fetch(channelId).catch(() => null)) as any;
+    }
+    const channelName = channel?.name ?? `voice-${channelId}`;
 
     // Flap Protection: check if user had a pending leave in grace window
     const pending = this.pendingLeaves.get(key);
     if (pending) {
       clearTimeout(pending.timeoutId);
       this.pendingLeaves.delete(key);
-      logger.info(`⚡ [tracker] Anti-Flap Triggered: Cancelled pending disconnect for ${userId} (reconnected in < ${this.flapGraceSeconds}s)`);
+      logger.info(`⚡ [tracker] Anti-Flap Triggered: Cancelled pending disconnect for ${username} (${userId}) (reconnected in < ${this.flapGraceSeconds}s)`);
       return;
     }
 
     // Upsert channel details
-    await this.sessionRepo.upsertChannel(channel.id, guildId, channel.name, false);
+    await this.sessionRepo.upsertChannel(channelId, guildId, channelName, false);
 
-    logger.info(`🎙️ [tracker] User ${userId} joined ${channel.name} in guild ${guildId}. Starting session.`);
+    logger.info(`🎙️ [tracker] User ${username} (${userId}) JOINED #${channelName} in ${guild.name || guildId}. Starting session.`);
     await this.sessionRepo.startSession({
       guildId,
       userId,
-      channelId: channel.id,
-      channelName: channel.name,
+      channelId,
+      channelName,
       wasMuted: state.selfMute || state.serverMute || false,
       wasDeafened: state.selfDeaf || state.serverDeaf || false,
       wasStreaming: state.streaming || false,
     });
   }
 
-  private async handleLeave(guildId: string, userId: string, key: string): Promise<void> {
+  private async handleLeave(
+    guildId: string,
+    userId: string,
+    username: string,
+    key: string
+  ): Promise<void> {
     const active = await this.sessionRepo.getActiveSession(guildId, userId);
     if (!active) return;
 
-    logger.info(`⏳ [tracker] User ${userId} disconnected. Staging leave with ${this.flapGraceSeconds}s grace window...`);
+    logger.info(`⏳ [tracker] User ${username} (${userId}) DISCONNECTED. Staging leave with ${this.flapGraceSeconds}s grace window...`);
 
     // If already pending, clear old timer
     const existing = this.pendingLeaves.get(key);
@@ -145,10 +179,10 @@ export class VoiceTracker {
         });
 
         if (finalized) {
-          logger.info(`✅ [tracker] Session finalized for user ${userId}. Total Duration: ${finalized.durationSeconds}s`);
+          logger.info(`✅ [tracker] Session finalized for user ${username} (${userId}). Total Duration: ${finalized.durationSeconds}s`);
         }
       } catch (err) {
-        logger.error(`❌ [tracker] Error ending session for user ${userId}:`, err);
+        logger.error(`❌ [tracker] Error ending session for user ${username} (${userId}):`, err);
       }
     }, this.flapGraceSeconds * 1000);
 
@@ -158,10 +192,18 @@ export class VoiceTracker {
       leaveTime,
       guildId,
       userId,
+      username,
     });
   }
 
-  private async handleSwitch(guildId: string, userId: string, state: VoiceState, key: string): Promise<void> {
+  private async handleSwitch(
+    guild: any,
+    guildId: string,
+    userId: string,
+    username: string,
+    state: VoiceState,
+    key: string
+  ): Promise<void> {
     // If pending leave was staged, cancel it
     const pending = this.pendingLeaves.get(key);
     if (pending) {
@@ -169,28 +211,35 @@ export class VoiceTracker {
       this.pendingLeaves.delete(key);
     }
 
-    const active = await this.sessionRepo.getActiveSession(guildId, userId);
-    const channel = state.channel!;
+    const channelId = state.channelId!;
+    let channel = state.channel;
+    if (!channel && guild.channels?.fetch) {
+      channel = (await guild.channels.fetch(channelId).catch(() => null)) as any;
+    }
+    const channelName = channel?.name ?? `voice-${channelId}`;
 
-    await this.sessionRepo.upsertChannel(channel.id, guildId, channel.name, false);
+    const active = await this.sessionRepo.getActiveSession(guildId, userId);
+
+    await this.sessionRepo.upsertChannel(channelId, guildId, channelName, false);
 
     if (active) {
-      logger.info(`🔄 [tracker] User ${userId} switched to ${channel.name}. Splitting segment.`);
+      logger.info(`🔄 [tracker] User ${username} (${userId}) SWITCHED to #${channelName}. Splitting segment.`);
       await this.sessionRepo.switchChannel({
         sessionId: active.id,
-        newChannelId: channel.id,
-        newChannelName: channel.name,
+        newChannelId: channelId,
+        newChannelName: channelName,
         wasMuted: state.selfMute || state.serverMute || false,
         wasDeafened: state.selfDeaf || state.serverDeaf || false,
         wasStreaming: state.streaming || false,
       });
     } else {
       // Re-initiate if session was missing
+      logger.info(`🎙️ [tracker] User ${username} (${userId}) switched to #${channelName} with no prior session. Starting session.`);
       await this.sessionRepo.startSession({
         guildId,
         userId,
-        channelId: channel.id,
-        channelName: channel.name,
+        channelId,
+        channelName,
         wasMuted: state.selfMute || state.serverMute || false,
         wasDeafened: state.selfDeaf || state.serverDeaf || false,
         wasStreaming: state.streaming || false,
@@ -209,7 +258,7 @@ export class VoiceTracker {
           sessionId: pending.sessionId,
           endedAt: pending.leaveTime,
         });
-        logger.info(`[tracker] Flushed pending leave for ${pending.userId}`);
+        logger.info(`[tracker] Flushed pending leave for ${pending.username || pending.userId}`);
       } catch (err) {
         logger.error(`[tracker] Failed to flush pending leave:`, err);
       }

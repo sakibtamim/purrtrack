@@ -50,4 +50,17 @@ export class GuildSettingsRepository {
 
     return updated;
   }
+
+  async addAdminRole(guildId: string, roleId: string): Promise<GuildSetting> {
+    const settings = await this.getSettings(guildId);
+    const roles = new Set(settings.adminRoleIds || []);
+    roles.add(roleId);
+    return this.updateSettings(guildId, { adminRoleIds: Array.from(roles) });
+  }
+
+  async removeAdminRole(guildId: string, roleId: string): Promise<GuildSetting> {
+    const settings = await this.getSettings(guildId);
+    const roles = (settings.adminRoleIds || []).filter((id) => id !== roleId);
+    return this.updateSettings(guildId, { adminRoleIds: roles });
+  }
 }

@@ -2,8 +2,9 @@ import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
   EmbedBuilder,
+  PermissionFlagsBits,
 } from 'discord.js';
-import { VoiceSessionRepository } from '@purrtrack/db';
+import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
 import { formatDuration } from '@purrtrack/shared';
 
 export const statusCommand = new SlashCommandBuilder()
@@ -12,13 +13,14 @@ export const statusCommand = new SlashCommandBuilder()
   .addUserOption((opt) =>
     opt
       .setName('target')
-      .setDescription('Target member to inspect (Admin/Manager only, defaults to yourself)')
+      .setDescription('Target member to inspect (Management / Admin only, defaults to yourself)')
       .setRequired(false)
   );
 
 export async function handleStatusCommand(
   interaction: ChatInputCommandInteraction,
-  sessionRepo: VoiceSessionRepository
+  sessionRepo: VoiceSessionRepository,
+  settingsRepo?: GuildSettingsRepository
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
@@ -27,13 +29,34 @@ export async function handleStatusCommand(
   }
 
   const targetUser = interaction.options.getUser('target') || interaction.user;
-  const member = await guild.members.fetch(targetUser.id).catch(() => null);
+  const isSelf = targetUser.id === interaction.user.id;
 
+  // RBAC Permission Check: Regular members can only view their own status
+  if (!isSelf) {
+    const member = await guild.members.fetch(interaction.user.id);
+    const settings = settingsRepo ? await settingsRepo.getSettings(guild.id) : null;
+    const isOwner = guild.ownerId === interaction.user.id;
+    const isManager =
+      isOwner ||
+      member.permissions.has(PermissionFlagsBits.Administrator) ||
+      member.permissions.has(PermissionFlagsBits.ManageGuild) ||
+      Boolean(settings?.adminRoleIds && member.roles.cache.some((r) => settings.adminRoleIds?.includes(r.id)));
+
+    if (!isManager) {
+      await interaction.reply({
+        content: '⛔ You can only view your own status. Inspecting other team members requires a Management or Administrator role.',
+        ephemeral: true,
+      });
+      return;
+    }
+  }
+
+  const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
   let activeSession = await sessionRepo.getActiveSession(guild.id, targetUser.id);
 
-  // Self-Healing Invariant: if member is physically in a voice channel, ensure tracking is active
-  if (!activeSession && member?.voice?.channel) {
-    const channel = member.voice.channel;
+  // Self-Healing Invariant: if target is physically in voice, ensure tracking is active
+  if (!activeSession && targetMember?.voice?.channel) {
+    const channel = targetMember.voice.channel;
     const isAfk = guild.afkChannelId ? channel.id === guild.afkChannelId : false;
 
     if (!isAfk) {
@@ -43,9 +66,9 @@ export async function handleStatusCommand(
         userId: targetUser.id,
         channelId: channel.id,
         channelName: channel.name,
-        wasMuted: member.voice.selfMute || member.voice.serverMute || false,
-        wasDeafened: member.voice.selfDeaf || member.voice.serverDeaf || false,
-        wasStreaming: member.voice.streaming || false,
+        wasMuted: targetMember.voice.selfMute || targetMember.voice.serverMute || false,
+        wasDeafened: targetMember.voice.selfDeaf || targetMember.voice.serverDeaf || false,
+        wasStreaming: targetMember.voice.streaming || false,
       });
       activeSession = startResult.session;
     }
@@ -66,7 +89,7 @@ export async function handleStatusCommand(
     ? Math.max(0, Math.floor((now.getTime() - new Date(activeSegment.startedAt).getTime()) / 1000))
     : 0;
 
-  const currentChannel = member?.voice.channel?.name || activeSegment?.channelName || 'Voice Channel';
+  const currentChannel = targetMember?.voice.channel?.name || activeSegment?.channelName || 'Voice Channel';
 
   const embed = new EmbedBuilder()
     .setColor(0x57f287) // Green

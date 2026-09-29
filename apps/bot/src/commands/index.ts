@@ -33,7 +33,7 @@ export async function dispatchSlashCommand(
         break;
 
       case 'status':
-        await handleStatusCommand(interaction, sessionRepo);
+        await handleStatusCommand(interaction, sessionRepo, settingsRepo);
         break;
 
       case 'report':

@@ -1,11 +1,13 @@
 import {
   ChatInputCommandInteraction,
+  AutocompleteInteraction,
   SlashCommandBuilder,
   PermissionFlagsBits,
   EmbedBuilder,
   ChannelType,
 } from 'discord.js';
 import { GuildSettingsRepository } from '@purrtrack/db';
+import { logger } from '../core/logger.js';
 
 export const configCommand = new SlashCommandBuilder()
   .setName('config')
@@ -36,7 +38,13 @@ export const configCommand = new SlashCommandBuilder()
     sub
       .setName('role_remove')
       .setDescription('Remove Management permissions from a role')
-      .addRoleOption((opt) => opt.setName('role').setDescription('Role to revoke Management permissions from').setRequired(true))
+      .addStringOption((opt) =>
+        opt
+          .setName('role')
+          .setDescription('Select the configured Management role to remove')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
   );
 
 export async function handleConfigCommand(
@@ -122,11 +130,43 @@ export async function handleConfigCommand(
   }
 
   if (subcommand === 'role_remove') {
-    const role = interaction.options.getRole('role', true);
-    await settingsRepo.removeAdminRole(guild.id, role.id);
+    const rawRole = interaction.options.getString('role', true).trim();
+    const roleId = rawRole.replace(/[<@&>]/g, '');
+
+    if (roleId === 'none') {
+      await interaction.reply({
+        content: '⚠️ There are no Management roles currently configured in this server.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const currentSettings = await settingsRepo.getSettings(guild.id);
+    const existingRoles = currentSettings.adminRoleIds || [];
+
+    let targetRoleId = roleId;
+    if (!existingRoles.includes(targetRoleId)) {
+      const matched = existingRoles.find((rId) => {
+        const r = guild.roles.cache.get(rId);
+        return r && (r.name.toLowerCase() === rawRole.toLowerCase() || `@${r.name.toLowerCase()}` === rawRole.toLowerCase());
+      });
+      if (matched) {
+        targetRoleId = matched;
+      }
+    }
+
+    if (!existingRoles.includes(targetRoleId)) {
+      await interaction.reply({
+        content: `⚠️ That role is not in the configured Management Roles list.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await settingsRepo.removeAdminRole(guild.id, targetRoleId);
 
     await interaction.reply({
-      content: `✅ Successfully removed Management permissions from <@&${role.id}>.`,
+      content: `✅ Successfully removed Management permissions from <@&${targetRoleId}>.`,
       ephemeral: true,
     });
     return;
@@ -157,5 +197,70 @@ export async function handleConfigCommand(
       content: `✅ Successfully updated PurrTrack settings for **${guild.name}**!`,
       ephemeral: true,
     });
+  }
+}
+
+export async function handleConfigAutocomplete(
+  interaction: AutocompleteInteraction,
+  settingsRepo: GuildSettingsRepository
+): Promise<void> {
+  const guild = interaction.guild;
+  if (!guild) {
+    await interaction.respond([]);
+    return;
+  }
+
+  const subcommand = interaction.options.getSubcommand(false);
+  if (subcommand !== 'role_remove') {
+    await interaction.respond([]);
+    return;
+  }
+
+  const focused = interaction.options.getFocused(true);
+  if (focused.name !== 'role') {
+    await interaction.respond([]);
+    return;
+  }
+
+  try {
+    const settings = await settingsRepo.getSettings(guild.id);
+    const roleIds = settings.adminRoleIds || [];
+
+    if (roleIds.length === 0) {
+      await interaction.respond([
+        { name: '⚠️ No management roles currently configured', value: 'none' },
+      ]);
+      return;
+    }
+
+    const query = focused.value.toLowerCase().trim();
+    const choices: { name: string; value: string }[] = [];
+
+    if (guild.roles.cache.size <= 1) {
+      await guild.roles.fetch().catch(() => {});
+    }
+
+    for (const roleId of roleIds) {
+      const role = guild.roles.cache.get(roleId);
+      const roleName = role ? `@${role.name}` : `Role ID: ${roleId}`;
+      if (!query || roleName.toLowerCase().includes(query)) {
+        choices.push({
+          name: roleName.slice(0, 100),
+          value: roleId,
+        });
+      }
+    }
+
+    if (choices.length === 0) {
+      await interaction.respond([
+        { name: '⚠️ No matching configured management roles', value: 'none' },
+      ]);
+      return;
+    }
+
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    logger.error('[config:autocomplete] Error generating role choices:', error);
+    await interaction.respond([]).catch(() => {});
   }
 }

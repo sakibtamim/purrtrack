@@ -1,11 +1,12 @@
 import {
   ChatInputCommandInteraction,
+  AutocompleteInteraction,
   RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
 import { statusCommand, handleStatusCommand } from './status.js';
 import { reportCommand, handleReportCommand } from './report.js';
-import { configCommand, handleConfigCommand } from './config.js';
+import { configCommand, handleConfigCommand, handleConfigAutocomplete } from './config.js';
 import { helpCommand, handleHelpCommand } from './help.js';
 import { pingCommand, handlePingCommand } from './ping.js';
 import { logger } from '../core/logger.js';
@@ -61,5 +62,19 @@ export async function dispatchSlashCommand(
     } else {
       await interaction.reply({ content: errorMessage, ephemeral: true }).catch(() => {});
     }
+  }
+}
+
+export async function dispatchAutocomplete(
+  interaction: AutocompleteInteraction,
+  settingsRepo: GuildSettingsRepository
+): Promise<void> {
+  const { commandName } = interaction;
+  try {
+    if (commandName === 'config') {
+      await handleConfigAutocomplete(interaction, settingsRepo);
+    }
+  } catch (error) {
+    logger.error(`[autocomplete] Error executing autocomplete for /\${commandName}:`, error);
   }
 }

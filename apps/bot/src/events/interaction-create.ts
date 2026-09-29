@@ -1,6 +1,6 @@
 import { Interaction, Client } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
-import { dispatchSlashCommand } from '../commands/index.js';
+import { dispatchSlashCommand, dispatchAutocomplete } from '../commands/index.js';
 import { logger } from '../core/logger.js';
 
 export function registerInteractionCreate(
@@ -9,6 +9,15 @@ export function registerInteractionCreate(
   settingsRepo: GuildSettingsRepository
 ): void {
   client.on('interactionCreate', async (interaction: Interaction) => {
+    if (interaction.isAutocomplete()) {
+      try {
+        await dispatchAutocomplete(interaction, settingsRepo);
+      } catch (err) {
+        logger.error('[events:interactionCreate] Autocomplete error:', err);
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     try {

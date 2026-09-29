@@ -7,49 +7,37 @@ import {
 } from 'discord.js';
 import { GuildSettingsRepository } from '@purrtrack/db';
 
-function buildConfigSubcommands(builder: SlashCommandBuilder): any {
-  return builder
-    .addSubcommand((sub) => sub.setName('view').setDescription('View current server tracking settings & manager roles'))
-    .addSubcommand((sub) =>
-      sub
-        .setName('set')
-        .setDescription('Update server tracking settings')
-        .addBooleanOption((opt) => opt.setName('enabled').setDescription('Enable/disable voice tracking'))
-        .addBooleanOption((opt) => opt.setName('exclude_afk').setDescription('Ignore time spent in the AFK channel'))
-        .addBooleanOption((opt) => opt.setName('track_muted').setDescription('Track time when user is muted'))
-        .addBooleanOption((opt) => opt.setName('track_deafened').setDescription('Track time when user is deafened'))
-        .addChannelOption((opt) =>
-          opt
-            .setName('announce_channel')
-            .setDescription('Channel for online/offline bot announcements')
-            .addChannelTypes(ChannelType.GuildText)
-        )
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('role_add')
-        .setDescription('Assign a Management role (allows member inspection & server-wide reporting)')
-        .addRoleOption((opt) => opt.setName('role').setDescription('Role to grant Management permissions').setRequired(true))
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('role_remove')
-        .setDescription('Remove Management permissions from a role')
-        .addRoleOption((opt) => opt.setName('role').setDescription('Role to revoke Management permissions from').setRequired(true))
-    );
-}
-
-export const configCommand = buildConfigSubcommands(
-  new SlashCommandBuilder()
-    .setName('config')
-    .setDescription('⚙️ Manage PurrTrack server configuration & management roles')
-);
-
-export const trackConfigCommand = buildConfigSubcommands(
-  new SlashCommandBuilder()
-    .setName('track-config')
-    .setDescription('⚙️ Manage PurrTrack settings & management roles (No other-bot clash)')
-);
+export const configCommand = new SlashCommandBuilder()
+  .setName('config')
+  .setDescription('⚙️ Manage PurrTrack server configuration & management roles')
+  .addSubcommand((sub) => sub.setName('view').setDescription('View current server tracking settings & manager roles'))
+  .addSubcommand((sub) =>
+    sub
+      .setName('set')
+      .setDescription('Update server tracking settings')
+      .addBooleanOption((opt) => opt.setName('enabled').setDescription('Enable/disable voice tracking'))
+      .addBooleanOption((opt) => opt.setName('exclude_afk').setDescription('Ignore time spent in the AFK channel'))
+      .addBooleanOption((opt) => opt.setName('track_muted').setDescription('Track time when user is muted'))
+      .addBooleanOption((opt) => opt.setName('track_deafened').setDescription('Track time when user is deafened'))
+      .addChannelOption((opt) =>
+        opt
+          .setName('announce_channel')
+          .setDescription('Channel for online/offline bot announcements')
+          .addChannelTypes(ChannelType.GuildText)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('role_add')
+      .setDescription('Assign a Management role (allows member inspection & server-wide reporting)')
+      .addRoleOption((opt) => opt.setName('role').setDescription('Role to grant Management permissions').setRequired(true))
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('role_remove')
+      .setDescription('Remove Management permissions from a role')
+      .addRoleOption((opt) => opt.setName('role').setDescription('Role to revoke Management permissions from').setRequired(true))
+  );
 
 export async function handleConfigCommand(
   interaction: ChatInputCommandInteraction,

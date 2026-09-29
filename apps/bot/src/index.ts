@@ -28,12 +28,11 @@ async function bootstrap(): Promise<void> {
   const voiceTracker = new VoiceTracker(sessionRepo, settingsRepo, 5); // 5s anti-flap debounce
   const reconciler = new StartupReconciler(sessionRepo);
 
-  // 4. Create Discord Client with exact required voice intents
+  // 4. Create Discord Client with exact required voice intents (unprivileged)
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildVoiceStates,
-      GatewayIntentBits.GuildMembers,
     ],
   });
 

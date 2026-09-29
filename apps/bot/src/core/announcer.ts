@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 
 export async function sendStartupAnnouncement(client: Client): Promise<void> {
   const channelId = env.DISCORD_ANNOUNCE_CHANNEL_ID;
-  if (!channelId) return;
+  if (!channelId || !/^\d{17,20}$/.test(channelId)) return;
 
   try {
     const channel = await client.channels.fetch(channelId);

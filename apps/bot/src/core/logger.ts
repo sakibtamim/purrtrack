@@ -6,7 +6,12 @@ function formatTimestamp(): string {
 
 function formatMessage(level: LogLevel, message: string, meta?: unknown): string {
   const timestamp = formatTimestamp();
-  const metaStr = meta !== undefined ? ` ${JSON.stringify(meta)}` : '';
+  let metaStr = '';
+  if (meta instanceof Error) {
+    metaStr = `\n${meta.stack || meta.message}`;
+  } else if (meta !== undefined) {
+    metaStr = typeof meta === 'object' ? ` ${JSON.stringify(meta, null, 2)}` : ` ${String(meta)}`;
+  }
   return `[${timestamp}] [${level}] ${message}${metaStr}`;
 }
 

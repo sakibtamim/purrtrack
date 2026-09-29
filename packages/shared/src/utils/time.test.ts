@@ -1,0 +1,56 @@
+import { describe, it, expect } from 'vitest';
+import { formatDuration, formatDurationClock, resolveTimeRange } from './time';
+import { TimeRangePreset } from '../enums/index';
+
+describe('Time Utilities', () => {
+  describe('formatDuration', () => {
+    it('should format 0 or negative seconds as 0s', () => {
+      expect(formatDuration(0)).toBe('0s');
+      expect(formatDuration(-15)).toBe('0s');
+    });
+
+    it('should format seconds only', () => {
+      expect(formatDuration(45)).toBe('45s');
+    });
+
+    it('should format minutes and seconds', () => {
+      expect(formatDuration(135)).toBe('2m 15s');
+    });
+
+    it('should format hours, minutes, and seconds', () => {
+      expect(formatDuration(3665)).toBe('1h 1m 5s');
+      expect(formatDuration(7200)).toBe('2h 0m');
+    });
+  });
+
+  describe('formatDurationClock', () => {
+    it('should format 0 seconds as 00:00:00', () => {
+      expect(formatDurationClock(0)).toBe('00:00:00');
+    });
+
+    it('should format seconds into HH:MM:SS', () => {
+      expect(formatDurationClock(3665)).toBe('01:01:05');
+      expect(formatDurationClock(45)).toBe('00:00:45');
+    });
+  });
+
+  describe('resolveTimeRange', () => {
+    it('should resolve TODAY starting at 00:00:00 UTC', () => {
+      const range = resolveTimeRange(TimeRangePreset.TODAY);
+      expect(range.startDate.getUTCHours()).toBe(0);
+      expect(range.startDate.getUTCMinutes()).toBe(0);
+      expect(range.endDate.getTime()).toBeGreaterThan(range.startDate.getTime());
+    });
+
+    it('should resolve THIS_WEEK starting on Monday UTC', () => {
+      const range = resolveTimeRange(TimeRangePreset.THIS_WEEK);
+      expect(range.startDate.getUTCDay()).toBe(1); // Monday
+      expect(range.startDate.getUTCHours()).toBe(0);
+    });
+
+    it('should resolve ALL_TIME from epoch', () => {
+      const range = resolveTimeRange(TimeRangePreset.ALL_TIME);
+      expect(range.startDate.getTime()).toBe(0);
+    });
+  });
+});

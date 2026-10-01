@@ -141,3 +141,118 @@ export function renderProgressBar(percentage: number, length: number = 10): stri
 
   return `[${bar}] ${formattedPercent}%`;
 }
+
+/**
+ * Parse focus duration input: "25", "25m", "1h", "2h", "1.5h", "90m", "120"
+ * Returns duration in minutes, or null if unparseable
+ */
+export function parseDurationToMinutes(input?: string | number | null, defaultMinutes: number = 25): number | null {
+  if (input === undefined || input === null) return defaultMinutes;
+
+  if (typeof input === 'number') {
+    return Math.max(1, Math.min(720, Math.round(input)));
+  }
+
+  const str = input.trim().toLowerCase();
+  if (!str) return defaultMinutes;
+
+  // Hours: e.g. "2h", "1.5h", "2hrs", "2 hours"
+  const hourMatch = str.match(/^([\d.]+)\s*(h|hr|hrs|hour|hours)$/);
+  if (hourMatch) {
+    const hours = parseFloat(hourMatch[1]);
+    if (!isNaN(hours) && hours > 0) {
+      return Math.max(1, Math.min(720, Math.round(hours * 60)));
+    }
+  }
+
+  // Minutes: e.g. "25m", "90min", "120mins", "25 minutes"
+  const minMatch = str.match(/^([\d.]+)\s*(m|min|mins|minute|minutes)$/);
+  if (minMatch) {
+    const mins = parseFloat(minMatch[1]);
+    if (!isNaN(mins) && mins > 0) {
+      return Math.max(1, Math.min(720, Math.round(mins)));
+    }
+  }
+
+  // Plain number: e.g. "120", "25"
+  const num = parseFloat(str);
+  if (!isNaN(num) && num > 0) {
+    return Math.max(1, Math.min(720, Math.round(num)));
+  }
+
+  return null;
+}
+
+/**
+ * Parse break duration input: "5", "5m", "10m", "0", "0m", "off"
+ * Returns break in minutes, or null if unparseable
+ */
+export function parseBreakToMinutes(input?: string | number | null, defaultMinutes: number = 5): number | null {
+  if (input === undefined || input === null) return defaultMinutes;
+
+  if (typeof input === 'number') {
+    return Math.max(0, Math.min(120, Math.round(input)));
+  }
+
+  const str = input.trim().toLowerCase();
+  if (!str) return defaultMinutes;
+  if (str === '0' || str === '0m' || str === 'none' || str === 'off' || str === 'disable') return 0;
+
+  // Minutes or plain number
+  const minMatch = str.match(/^([\d.]+)\s*(m|min|mins|minute|minutes)?$/);
+  if (minMatch) {
+    const mins = parseFloat(minMatch[1]);
+    if (!isNaN(mins) && mins >= 0) {
+      return Math.max(0, Math.min(120, Math.round(mins)));
+    }
+  }
+
+  // Hours: e.g. "0.5h"
+  const hourMatch = str.match(/^([\d.]+)\s*(h|hr|hrs|hour|hours)$/);
+  if (hourMatch) {
+    const hours = parseFloat(hourMatch[1]);
+    if (!isNaN(hours) && hours >= 0) {
+      return Math.max(0, Math.min(120, Math.round(hours * 60)));
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Format minutes into clean human-readable focus duration:
+ * 120 -> "2 hours"
+ * 60 -> "1 hour"
+ * 90 -> "1h 30m"
+ * 25 -> "25 minutes"
+ */
+export function formatFocusDuration(minutes: number): string {
+  if (minutes <= 0) return '0 minutes';
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hrs > 0 && mins > 0) {
+    return `${hrs}h ${mins}m`;
+  }
+  if (hrs > 0) {
+    return `${hrs} hour${hrs === 1 ? '' : 's'}`;
+  }
+  return `${mins} minute${mins === 1 ? '' : 's'}`;
+}
+
+/**
+ * Format interval label: "2h work", "25m work", "1h 30m work"
+ */
+export function formatIntervalLabel(minutes: number, suffix: string = ''): string {
+  if (minutes <= 0) return `0m${suffix ? ` ${suffix}` : ''}`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  let timeStr = '';
+  if (hrs > 0 && mins > 0) timeStr = `${hrs}h ${mins}m`;
+  else if (hrs > 0) timeStr = `${hrs}h`;
+  else timeStr = `${mins}m`;
+
+  return suffix ? `${timeStr} ${suffix}` : timeStr;
+}
+

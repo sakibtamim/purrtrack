@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { formatDuration, formatDurationClock, resolveTimeRange, renderProgressBar, getWeekStartDayIndex } from './time';
+import {
+  formatDuration,
+  formatDurationClock,
+  resolveTimeRange,
+  renderProgressBar,
+  getWeekStartDayIndex,
+  parseDurationToMinutes,
+  parseBreakToMinutes,
+  formatFocusDuration,
+  formatIntervalLabel,
+} from './time';
 import { TimeRangePreset } from '../enums/index';
 
 describe('Time Utilities', () => {
@@ -99,5 +109,61 @@ describe('Time Utilities', () => {
       expect(renderProgressBar(125.5, 10)).toBe('[██████████] 125.5%');
     });
   });
+
+  describe('parseDurationToMinutes', () => {
+    it('should parse plain minute numbers and strings', () => {
+      expect(parseDurationToMinutes(25)).toBe(25);
+      expect(parseDurationToMinutes('25')).toBe(25);
+      expect(parseDurationToMinutes('120')).toBe(120);
+      expect(parseDurationToMinutes('90m')).toBe(90);
+      expect(parseDurationToMinutes('45 mins')).toBe(45);
+    });
+
+    it('should parse hour strings into minutes', () => {
+      expect(parseDurationToMinutes('1h')).toBe(60);
+      expect(parseDurationToMinutes('2h')).toBe(120);
+      expect(parseDurationToMinutes('2.5h')).toBe(150);
+      expect(parseDurationToMinutes('3 hours')).toBe(180);
+    });
+
+    it('should return default when input is omitted', () => {
+      expect(parseDurationToMinutes(undefined, 25)).toBe(25);
+      expect(parseDurationToMinutes(null, 25)).toBe(25);
+      expect(parseDurationToMinutes('', 25)).toBe(25);
+    });
+
+    it('should return null for invalid input', () => {
+      expect(parseDurationToMinutes('invalid')).toBeNull();
+      expect(parseDurationToMinutes('abc')).toBeNull();
+    });
+  });
+
+  describe('parseBreakToMinutes', () => {
+    it('should parse break minutes and disable keywords', () => {
+      expect(parseBreakToMinutes(5)).toBe(5);
+      expect(parseBreakToMinutes('5m')).toBe(5);
+      expect(parseBreakToMinutes('10')).toBe(10);
+      expect(parseBreakToMinutes('0')).toBe(0);
+      expect(parseBreakToMinutes('off')).toBe(0);
+      expect(parseBreakToMinutes(undefined, 5)).toBe(5);
+    });
+  });
+
+  describe('formatFocusDuration and formatIntervalLabel', () => {
+    it('should format focus durations in clean hours and minutes', () => {
+      expect(formatFocusDuration(120)).toBe('2 hours');
+      expect(formatFocusDuration(60)).toBe('1 hour');
+      expect(formatFocusDuration(90)).toBe('1h 30m');
+      expect(formatFocusDuration(25)).toBe('25 minutes');
+    });
+
+    it('should format interval labels with suffixes', () => {
+      expect(formatIntervalLabel(120, 'work')).toBe('2h work');
+      expect(formatIntervalLabel(25, 'work')).toBe('25m work');
+      expect(formatIntervalLabel(5, 'break')).toBe('5m break');
+      expect(formatIntervalLabel(90, 'work')).toBe('1h 30m work');
+    });
+  });
 });
+
 

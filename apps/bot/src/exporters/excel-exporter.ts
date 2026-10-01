@@ -36,6 +36,15 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
   summarySheet.addRow(['Total Tracked Duration:', data.totalDurationFormatted]);
   summarySheet.addRow(['Total Voice Sessions:', data.totalSessions]);
   summarySheet.addRow(['Unique Active Users:', data.uniqueActiveUsers]);
+
+  if (data.contractorRate) {
+    summarySheet.addRow(['Hourly Billing Rate:', data.contractorRate.hourlyRateFormatted]);
+    summarySheet.addRow(['Total Billable Payout:', data.contractorRate.totalPayableFormatted]);
+  }
+  if (data.manualAdjustments && data.manualAdjustments.count > 0) {
+    summarySheet.addRow(['Manual Time Adjustments:', `${data.manualAdjustments.netFormatted} across ${data.manualAdjustments.count} entry/entries`]);
+  }
+
   summarySheet.addRow([]);
 
   // Top Channels Section
@@ -69,7 +78,7 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
   }
 
   summarySheet.columns = [
-    { width: 22 },
+    { width: 24 },
     { width: 32 },
     { width: 24 },
     { width: 18 },
@@ -81,7 +90,7 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
     views: [{ showGridLines: true }],
   });
 
-  const headerRow = detailsSheet.addRow([
+  const headerCols = [
     'Session ID',
     'User ID',
     'Username',
@@ -92,7 +101,13 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
     'Duration (Seconds)',
     'Duration (Formatted)',
     'Status',
-  ]);
+  ];
+
+  if (data.contractorRate) {
+    headerCols.push(`Line Amount (${data.contractorRate.currency})`);
+  }
+
+  const headerRow = detailsSheet.addRow(headerCols);
 
   headerRow.height = 26;
   headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -107,7 +122,7 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
 
   let rowIndex = 2;
   for (const session of data.sessions) {
-    const row = detailsSheet.addRow([
+    const rowValues: any[] = [
       session.id,
       session.userId,
       session.username,
@@ -118,7 +133,14 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
       session.durationSeconds,
       session.durationFormatted,
       session.status,
-    ]);
+    ];
+
+    if (data.contractorRate) {
+      const lineAmount = ((session.durationSeconds / 3600) * (data.contractorRate.hourlyRateCents / 100)).toFixed(2);
+      rowValues.push(Number(lineAmount));
+    }
+
+    const row = detailsSheet.addRow(rowValues);
 
     // Zebra striping
     if (rowIndex % 2 === 0) {
@@ -135,7 +157,7 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
 
   // Summary Row with Excel formula
   if (data.sessions.length > 0) {
-    const totalRow = detailsSheet.addRow([
+    const totalRowValues: any[] = [
       'TOTAL',
       '',
       '',
@@ -146,7 +168,13 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
       { formula: `SUM(H2:H${rowIndex - 1})` },
       data.totalDurationFormatted,
       '',
-    ]);
+    ];
+
+    if (data.contractorRate) {
+      totalRowValues.push({ formula: `SUM(K2:K${rowIndex - 1})` });
+    }
+
+    const totalRow = detailsSheet.addRow(totalRowValues);
     totalRow.font = { bold: true };
     totalRow.getCell(1).alignment = { horizontal: 'center' };
   }

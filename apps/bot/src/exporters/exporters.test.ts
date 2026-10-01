@@ -120,4 +120,37 @@ describe('Multi-Format Exporters', () => {
     expect(json.description).toContain('2h 2m 30s');
     expect(json.fields?.some((f) => f.name.includes('Top Voice Channels'))).toBe(true);
   });
+
+  it('Exporters handle contractor rates and invoice generation with BDT currency', async () => {
+    const invoiceReportData: AggregatedReportData = {
+      ...mockReportData,
+      contractorRate: {
+        hourlyRateCents: 50000,
+        hourlyRateFormatted: '500.00 BDT / hr',
+        currency: 'BDT',
+        totalPayableCents: 102083,
+        totalPayableFormatted: '1,020.83 BDT',
+      },
+      manualAdjustments: {
+        netSeconds: 1800,
+        netFormatted: '+30m',
+        count: 1,
+      },
+    };
+
+    // PDF Invoice
+    const pdfBuffer = await generatePdfReport(invoiceReportData);
+    expect(pdfBuffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    // Excel with line amounts
+    const excelBuffer = await generateExcelReport(invoiceReportData);
+    expect(excelBuffer[0]).toBe(0x50);
+    expect(excelBuffer[1]).toBe(0x4b);
+
+    // Discord Embed
+    const embed = generateDiscordEmbed(invoiceReportData);
+    const json = embed.toJSON();
+    expect(json.fields?.some((f) => f.name.includes('Contractor Compensation'))).toBe(true);
+    expect(json.fields?.some((f) => f.name.includes('Manual Adjustments'))).toBe(true);
+  });
 });

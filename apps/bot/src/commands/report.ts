@@ -144,9 +144,10 @@ export async function handleReportCommand(
             userId: voiceState.id,
             channelId: voiceState.channelId,
             channelName,
-            wasMuted: voiceState.selfMute || voiceState.serverMute || false,
-            wasDeafened: voiceState.selfDeaf || voiceState.serverDeaf || false,
-            wasStreaming: voiceState.streaming || false,
+            wasMuted: Boolean(voiceState.selfMute || voiceState.serverMute || voiceState.mute),
+            wasDeafened: Boolean(voiceState.selfDeaf || voiceState.serverDeaf || voiceState.deaf),
+            wasStreaming: Boolean(voiceState.streaming),
+            wasVideo: Boolean(voiceState.selfVideo),
           });
         }
       }

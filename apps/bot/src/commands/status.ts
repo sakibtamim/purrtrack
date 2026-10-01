@@ -92,10 +92,42 @@ export async function handleStatusCommand(
 
   const currentChannel = targetMember?.voice.channel?.name || activeSegment?.channelName || 'Voice Channel';
 
-  const isStreaming = targetMember?.voice.streaming ?? activeSegment?.wasStreaming ?? false;
-  const isVideo = targetMember?.voice.selfVideo ?? activeSegment?.wasVideo ?? false;
-  const isMuted = targetMember?.voice.selfMute || targetMember?.voice.serverMute || activeSegment?.wasMuted || false;
-  const isDeafened = targetMember?.voice.selfDeaf || targetMember?.voice.serverDeaf || activeSegment?.wasDeafened || false;
+  const isConnected = Boolean(targetMember?.voice?.channel);
+
+  const isStreaming = isConnected
+    ? Boolean(targetMember?.voice?.streaming)
+    : Boolean(activeSegment?.wasStreaming);
+
+  const isVideo = isConnected
+    ? Boolean(targetMember?.voice?.selfVideo)
+    : Boolean(activeSegment?.wasVideo);
+
+  const isMuted = isConnected
+    ? Boolean(targetMember?.voice?.selfMute || targetMember?.voice?.serverMute || targetMember?.voice?.mute)
+    : Boolean(activeSegment?.wasMuted);
+
+  const isDeafened = isConnected
+    ? Boolean(targetMember?.voice?.selfDeaf || targetMember?.voice?.serverDeaf || targetMember?.voice?.deaf)
+    : Boolean(activeSegment?.wasDeafened);
+
+  // Self-heal: If the member is currently in voice, keep database segment in sync
+  if (
+    isConnected &&
+    activeSegment &&
+    (activeSegment.wasMuted !== isMuted ||
+      activeSegment.wasDeafened !== isDeafened ||
+      activeSegment.wasStreaming !== isStreaming ||
+      activeSegment.wasVideo !== isVideo)
+  ) {
+    await sessionRepo.transitionState({
+      sessionId: activeSession.id,
+      wasMuted: isMuted,
+      wasDeafened: isDeafened,
+      wasStreaming: isStreaming,
+      wasVideo: isVideo,
+      timestamp: now,
+    });
+  }
 
   const mediaIndicators = [
     `🎙️ Mic: ${isMuted ? '🔇 Muted' : '🟢 Active'}`,

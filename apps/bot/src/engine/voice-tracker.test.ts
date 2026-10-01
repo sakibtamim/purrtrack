@@ -19,6 +19,7 @@ describe('VoiceTracker Engine & Anti-Flap Protection', () => {
       getActiveSession: vi.fn().mockResolvedValue({ id: 'sess-123', status: 'ACTIVE' }),
       getActiveSegment: vi.fn().mockResolvedValue({ id: 'seg-123' }),
       switchChannel: vi.fn().mockResolvedValue({ id: 'seg-456' }),
+      transitionState: vi.fn().mockResolvedValue({ id: 'seg-789' }),
       endSession: vi.fn().mockResolvedValue({ id: 'sess-123', status: 'COMPLETED', durationSeconds: 120 }),
     };
 
@@ -141,5 +142,36 @@ describe('VoiceTracker Engine & Anti-Flap Protection', () => {
         newChannelName: 'Gaming Lounge',
       })
     );
+  });
+
+  it('Transitions in-channel media state when toggling screen share or camera', async () => {
+    const member = { user: { bot: false, id: 'user-1', username: 'purr', displayAvatarURL: () => '' } };
+    const guild = { id: 'g-1', afkChannelId: 'afk-chan-999' };
+
+    const oldState: any = { channelId: 'vc-1', streaming: false, selfVideo: false, member, guild };
+    const newState: any = { channelId: 'vc-1', streaming: true, selfVideo: true, member, guild };
+
+    await tracker.handleVoiceStateUpdate(oldState, newState);
+
+    expect(mockSessionRepo.transitionState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'sess-123',
+        wasStreaming: true,
+        wasVideo: true,
+      })
+    );
+  });
+
+  it('Ignores voice connections in ignored channels configured in guild settings', async () => {
+    const member = { user: { bot: false, id: 'user-1', username: 'purr', displayAvatarURL: () => '' } };
+    const guild = { id: 'g-1', afkChannelId: 'afk-chan-999' };
+
+    // Connect to ignored channel 'afk-chan-999'
+    const oldState: any = { channelId: null, member, guild };
+    const newState: any = { channelId: 'afk-chan-999', member, guild };
+
+    await tracker.handleVoiceStateUpdate(oldState, newState);
+
+    expect(mockSessionRepo.startSession).not.toHaveBeenCalled();
   });
 });

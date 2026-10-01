@@ -106,9 +106,10 @@ export class VoiceTracker {
       return;
     }
 
-    // Event 4: In-channel state change (mute, deafen, stream)
+    // Event 4: In-channel state change (mute, deafen, stream, camera/video)
     if (oldChannelId && newChannelId && oldChannelId === newChannelId && !isNewIgnored) {
-      logger.debug(`[tracker] State toggle in channel ${newChannelId} for user ${username} (${userId})`);
+      await this.handleStateChange(guildId, userId, username, oldState, newState);
+      return;
     }
   }
 
@@ -148,6 +149,7 @@ export class VoiceTracker {
       wasMuted: state.selfMute || state.serverMute || false,
       wasDeafened: state.selfDeaf || state.serverDeaf || false,
       wasStreaming: state.streaming || false,
+      wasVideo: state.selfVideo || false,
     });
   }
 
@@ -231,6 +233,7 @@ export class VoiceTracker {
         wasMuted: state.selfMute || state.serverMute || false,
         wasDeafened: state.selfDeaf || state.serverDeaf || false,
         wasStreaming: state.streaming || false,
+        wasVideo: state.selfVideo || false,
       });
     } else {
       // Re-initiate if session was missing
@@ -243,8 +246,49 @@ export class VoiceTracker {
         wasMuted: state.selfMute || state.serverMute || false,
         wasDeafened: state.selfDeaf || state.serverDeaf || false,
         wasStreaming: state.streaming || false,
+        wasVideo: state.selfVideo || false,
       });
     }
+  }
+
+  private async handleStateChange(
+    guildId: string,
+    userId: string,
+    username: string,
+    oldState: VoiceState,
+    newState: VoiceState
+  ): Promise<void> {
+    const oldMuted = Boolean(oldState.selfMute || oldState.serverMute);
+    const newMuted = Boolean(newState.selfMute || newState.serverMute);
+    const oldDeafened = Boolean(oldState.selfDeaf || oldState.serverDeaf);
+    const newDeafened = Boolean(newState.selfDeaf || newState.serverDeaf);
+    const oldStreaming = Boolean(oldState.streaming);
+    const newStreaming = Boolean(newState.streaming);
+    const oldVideo = Boolean(oldState.selfVideo);
+    const newVideo = Boolean(newState.selfVideo);
+
+    const hasChanged =
+      oldMuted !== newMuted ||
+      oldDeafened !== newDeafened ||
+      oldStreaming !== newStreaming ||
+      oldVideo !== newVideo;
+
+    if (!hasChanged) return;
+
+    const active = await this.sessionRepo.getActiveSession(guildId, userId);
+    if (!active) return;
+
+    logger.info(
+      `📹 [tracker] Media/state toggle for @${username} (${userId}): stream:${oldStreaming}➔${newStreaming}, video:${oldVideo}➔${newVideo}, mute:${oldMuted}➔${newMuted}, deaf:${oldDeafened}➔${newDeafened}`
+    );
+
+    await this.sessionRepo.transitionState({
+      sessionId: active.id,
+      wasMuted: newMuted,
+      wasDeafened: newDeafened,
+      wasStreaming: newStreaming,
+      wasVideo: newVideo,
+    });
   }
 
   /**

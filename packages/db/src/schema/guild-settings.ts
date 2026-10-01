@@ -5,6 +5,8 @@ export const guildSettings = pgTable('guild_settings', {
   trackingEnabled: boolean('tracking_enabled').notNull().default(true),
   trackMuted: boolean('track_muted').notNull().default(true),
   trackDeafened: boolean('track_deafened').notNull().default(false),
+  trackStreaming: boolean('track_streaming').notNull().default(true),
+  trackCamera: boolean('track_camera').notNull().default(true),
   excludeAfk: boolean('exclude_afk').notNull().default(true),
   minDurationSeconds: integer('min_duration_seconds').notNull().default(10),
   timezone: varchar('timezone', { length: 50 }).notNull().default('UTC'),

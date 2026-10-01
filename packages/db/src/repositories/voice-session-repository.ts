@@ -15,6 +15,7 @@ export interface StartSessionParams {
   wasMuted?: boolean;
   wasDeafened?: boolean;
   wasStreaming?: boolean;
+  wasVideo?: boolean;
 }
 
 export interface SwitchChannelParams {
@@ -25,6 +26,16 @@ export interface SwitchChannelParams {
   wasMuted?: boolean;
   wasDeafened?: boolean;
   wasStreaming?: boolean;
+  wasVideo?: boolean;
+}
+
+export interface TransitionStateParams {
+  sessionId: string;
+  wasMuted?: boolean;
+  wasDeafened?: boolean;
+  wasStreaming?: boolean;
+  wasVideo?: boolean;
+  timestamp?: Date;
 }
 
 export interface EndSessionParams {
@@ -133,6 +144,7 @@ export class VoiceSessionRepository {
           wasMuted: params.wasMuted ?? false,
           wasDeafened: params.wasDeafened ?? false,
           wasStreaming: params.wasStreaming ?? false,
+          wasVideo: params.wasVideo ?? false,
         })
         .returning();
 
@@ -209,6 +221,7 @@ export class VoiceSessionRepository {
           wasMuted: params.wasMuted ?? false,
           wasDeafened: params.wasDeafened ?? false,
           wasStreaming: params.wasStreaming ?? false,
+          wasVideo: params.wasVideo ?? false,
         })
         .returning();
 
@@ -224,6 +237,52 @@ export class VoiceSessionRepository {
           updatedAt: new Date(),
         })
         .where(eq(voiceSessions.id, params.sessionId));
+
+      return newSegment;
+    });
+  }
+
+  /**
+   * Handle in-channel state transition (e.g. webcam, screenshare, or mute toggle).
+   * Closes active segment and opens new segment with updated state flags.
+   */
+  async transitionState(params: TransitionStateParams): Promise<SessionSegmentRow | null> {
+    const timestamp = params.timestamp || new Date();
+
+    return await this.database.transaction(async (tx) => {
+      const [activeSegment] = await tx
+        .select()
+        .from(sessionSegments)
+        .where(and(eq(sessionSegments.sessionId, params.sessionId), sql`${sessionSegments.endedAt} IS NULL`))
+        .limit(1);
+
+      if (!activeSegment) {
+        return null;
+      }
+
+      const segDuration = Math.max(
+        0,
+        Math.floor((timestamp.getTime() - new Date(activeSegment.startedAt).getTime()) / 1000)
+      );
+
+      await tx
+        .update(sessionSegments)
+        .set({ endedAt: timestamp, durationSeconds: segDuration })
+        .where(eq(sessionSegments.id, activeSegment.id));
+
+      const [newSegment] = await tx
+        .insert(sessionSegments)
+        .values({
+          sessionId: params.sessionId,
+          channelId: activeSegment.channelId,
+          channelName: activeSegment.channelName,
+          startedAt: timestamp,
+          wasMuted: params.wasMuted ?? false,
+          wasDeafened: params.wasDeafened ?? false,
+          wasStreaming: params.wasStreaming ?? false,
+          wasVideo: params.wasVideo ?? false,
+        })
+        .returning();
 
       return newSegment;
     });

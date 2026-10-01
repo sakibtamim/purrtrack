@@ -115,4 +115,45 @@ describe('PostgreSQL Repositories Integration Suite', () => {
     expect(report.totalDurationFormatted).toBeDefined();
     expect(report.sessions.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('GuildSettings: adds and removes ignored channels', async () => {
+    const channelToIgnore = 'test_ignore_voice_123';
+    const updated = await settingsRepo.addIgnoredChannel(testGuildId, channelToIgnore);
+    expect(updated.ignoredChannelIds).toContain(channelToIgnore);
+
+    const restored = await settingsRepo.removeIgnoredChannel(testGuildId, channelToIgnore);
+    expect(restored.ignoredChannelIds).not.toContain(channelToIgnore);
+  });
+
+  it('VoiceSession: transitions in-channel media state (screen share & camera)', async () => {
+    const userMediaTest = `user_media_${Date.now()}`;
+    const startResult = await sessionRepo.startSession({
+      guildId: testGuildId,
+      userId: userMediaTest,
+      channelId: testChannel1,
+      channelName: 'Meeting Room',
+      wasStreaming: false,
+      wasVideo: false,
+    });
+
+    expect(startResult.segment.wasStreaming).toBe(false);
+    expect(startResult.segment.wasVideo).toBe(false);
+
+    // Toggle camera & screen share ON
+    const transitioned = await sessionRepo.transitionState({
+      sessionId: startResult.session.id,
+      wasStreaming: true,
+      wasVideo: true,
+      wasMuted: false,
+      wasDeafened: false,
+    });
+
+    expect(transitioned).toBeDefined();
+    expect(transitioned!.wasStreaming).toBe(true);
+    expect(transitioned!.wasVideo).toBe(true);
+    expect(transitioned!.channelId).toBe(testChannel1);
+
+    // Clean up session
+    await sessionRepo.endSession({ sessionId: startResult.session.id });
+  });
 });

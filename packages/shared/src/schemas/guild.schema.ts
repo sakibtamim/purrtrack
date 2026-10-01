@@ -6,6 +6,8 @@ export const guildSettingsSchema = z.object({
   trackingEnabled: z.boolean().default(true),
   trackMuted: z.boolean().default(true),
   trackDeafened: z.boolean().default(false),
+  trackStreaming: z.boolean().default(true),
+  trackCamera: z.boolean().default(true),
   excludeAfk: z.boolean().default(true),
   minDurationSeconds: z.number().int().min(0).max(3600).default(10),
   timezone: z.string().default('UTC'),

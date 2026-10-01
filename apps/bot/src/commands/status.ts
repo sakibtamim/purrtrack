@@ -69,6 +69,7 @@ export async function handleStatusCommand(
         wasMuted: targetMember.voice.selfMute || targetMember.voice.serverMute || false,
         wasDeafened: targetMember.voice.selfDeaf || targetMember.voice.serverDeaf || false,
         wasStreaming: targetMember.voice.streaming || false,
+        wasVideo: targetMember.voice.selfVideo || false,
       });
       activeSession = startResult.session;
     }
@@ -91,6 +92,18 @@ export async function handleStatusCommand(
 
   const currentChannel = targetMember?.voice.channel?.name || activeSegment?.channelName || 'Voice Channel';
 
+  const isStreaming = targetMember?.voice.streaming ?? activeSegment?.wasStreaming ?? false;
+  const isVideo = targetMember?.voice.selfVideo ?? activeSegment?.wasVideo ?? false;
+  const isMuted = targetMember?.voice.selfMute || targetMember?.voice.serverMute || activeSegment?.wasMuted || false;
+  const isDeafened = targetMember?.voice.selfDeaf || targetMember?.voice.serverDeaf || activeSegment?.wasDeafened || false;
+
+  const mediaIndicators = [
+    `🎙️ Mic: ${isMuted ? '🔇 Muted' : '🟢 Active'}`,
+    `🎧 Audio: ${isDeafened ? '🔇 Deafened' : '🟢 Listening'}`,
+    `🖥️ Screen: ${isStreaming ? '🟢 Sharing' : '⚪ Off'}`,
+    `📹 Camera: ${isVideo ? '🟢 ON' : '⚪ Off'}`,
+  ].join(' • ');
+
   const embed = new EmbedBuilder()
     .setColor(0x57f287) // Green
     .setTitle(`🟢 Live Voice Session: ${targetUser.username}`)
@@ -98,6 +111,7 @@ export async function handleStatusCommand(
     .addFields(
       { name: 'Total Session Duration', value: `\`${formatDuration(sessionElapsedSeconds)}\``, inline: true },
       { name: 'Current Channel Duration', value: `\`${formatDuration(segmentElapsedSeconds)}\``, inline: true },
+      { name: 'Live Activity & Media', value: mediaIndicators, inline: false },
       { name: 'Started At (UTC)', value: new Date(activeSession.startedAt).toUTCString(), inline: false }
     )
     .setFooter({ text: 'PurrTrack • TimeTrack for Discord' })

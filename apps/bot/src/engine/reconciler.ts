@@ -66,6 +66,7 @@ export class StartupReconciler {
               wasMuted: voiceState.selfMute || voiceState.serverMute || false,
               wasDeafened: voiceState.selfDeaf || voiceState.serverDeaf || false,
               wasStreaming: voiceState.streaming || false,
+              wasVideo: voiceState.selfVideo || false,
             });
             resumedCount++;
           }

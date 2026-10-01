@@ -22,6 +22,8 @@ export class GuildSettingsRepository {
       trackingEnabled: true,
       trackMuted: true,
       trackDeafened: false,
+      trackStreaming: true,
+      trackCamera: true,
       excludeAfk: true,
       minDurationSeconds: 10,
       timezone: 'UTC',
@@ -62,5 +64,18 @@ export class GuildSettingsRepository {
     const settings = await this.getSettings(guildId);
     const roles = (settings.adminRoleIds || []).filter((id) => id !== roleId);
     return this.updateSettings(guildId, { adminRoleIds: roles });
+  }
+
+  async addIgnoredChannel(guildId: string, channelId: string): Promise<GuildSetting> {
+    const settings = await this.getSettings(guildId);
+    const channels = new Set(settings.ignoredChannelIds || []);
+    channels.add(channelId);
+    return this.updateSettings(guildId, { ignoredChannelIds: Array.from(channels) });
+  }
+
+  async removeIgnoredChannel(guildId: string, channelId: string): Promise<GuildSetting> {
+    const settings = await this.getSettings(guildId);
+    const channels = (settings.ignoredChannelIds || []).filter((id) => id !== channelId);
+    return this.updateSettings(guildId, { ignoredChannelIds: channels });
   }
 }

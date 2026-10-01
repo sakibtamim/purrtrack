@@ -1,5 +1,5 @@
 import { VoiceState } from 'discord.js';
-import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
+import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
 import { logger } from '../core/logger.js';
 
 interface PendingLeave {
@@ -18,7 +18,8 @@ export class VoiceTracker {
   constructor(
     private readonly sessionRepo: VoiceSessionRepository,
     private readonly settingsRepo: GuildSettingsRepository,
-    private readonly flapGraceSeconds: number = 5
+    private readonly flapGraceSeconds: number = 5,
+    private readonly userGoalsRepo?: UserGoalsRepository
   ) {}
 
   private getKey(guildId: string, userId: string): string {
@@ -182,6 +183,11 @@ export class VoiceTracker {
 
         if (finalized) {
           logger.info(`✅ [tracker] Session finalized for user ${username} (${userId}). Total Duration: ${finalized.durationSeconds}s`);
+          if (this.userGoalsRepo && (finalized.durationSeconds ?? 0) >= 30) {
+            await this.userGoalsRepo.recordActivityAndStreak(guildId, userId, leaveTime).catch((e) => {
+              logger.warn(`[tracker] Failed to record streak for user ${userId}:`, e);
+            });
+          }
         }
       } catch (err) {
         logger.error(`❌ [tracker] Error ending session for user ${username} (${userId}):`, err);
@@ -298,10 +304,13 @@ export class VoiceTracker {
     for (const [key, pending] of this.pendingLeaves.entries()) {
       clearTimeout(pending.timeoutId);
       try {
-        await this.sessionRepo.endSession({
+        const finalized = await this.sessionRepo.endSession({
           sessionId: pending.sessionId,
           endedAt: pending.leaveTime,
         });
+        if (finalized && this.userGoalsRepo && (finalized.durationSeconds ?? 0) >= 30) {
+          await this.userGoalsRepo.recordActivityAndStreak(pending.guildId, pending.userId, pending.leaveTime).catch(() => {});
+        }
         logger.info(`[tracker] Flushed pending leave for ${pending.username || pending.userId}`);
       } catch (err) {
         logger.error(`[tracker] Failed to flush pending leave:`, err);

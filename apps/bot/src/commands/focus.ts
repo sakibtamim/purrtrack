@@ -5,7 +5,13 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import { FocusManager } from '../engine/focus-manager.js';
-import { formatDuration } from '@purrtrack/shared';
+import {
+  formatDuration,
+  parseDurationToMinutes,
+  parseBreakToMinutes,
+  formatFocusDuration,
+  formatIntervalLabel,
+} from '@purrtrack/shared';
 
 export const focusCommand = new SlashCommandBuilder()
   .setName('focus')
@@ -14,20 +20,16 @@ export const focusCommand = new SlashCommandBuilder()
     sub
       .setName('start')
       .setDescription('Start a focus sprint in voice')
-      .addIntegerOption((opt) =>
+      .addStringOption((opt) =>
         opt
-          .setName('work')
-          .setDescription('Focus duration in minutes (default: 25)')
-          .setMinValue(1)
-          .setMaxValue(180)
+          .setName('timer')
+          .setDescription('Focus duration (e.g. 25m, 1h, 2h, 90m, or minutes like 25, 120. Default: 25m)')
           .setRequired(false)
       )
-      .addIntegerOption((opt) =>
+      .addStringOption((opt) =>
         opt
           .setName('break')
-          .setDescription('Break duration in minutes (default: 5, 0 to disable)')
-          .setMinValue(0)
-          .setMaxValue(60)
+          .setDescription('Break duration (e.g. 5m, 10m, 15m, 0 to disable. Default: 5m)')
           .setRequired(false)
       )
       .addStringOption((opt) =>
@@ -59,7 +61,7 @@ export async function handleFocusCommand(
   const member = interaction.member as GuildMember;
 
   if (subcommand === 'start') {
-    // Verify voice connection
+    // 1. Verify voice connection
     if (!member?.voice?.channel) {
       await interaction.reply({
         content: '❌ You must be connected to a voice channel to start a focus sprint.',
@@ -68,9 +70,46 @@ export async function handleFocusCommand(
       return;
     }
 
-    const workMinutes = interaction.options.getInteger('work') ?? 25;
-    const breakMinutes = interaction.options.getInteger('break') ?? 5;
-    const task = interaction.options.getString('task') || 'Deep Work';
+    // 2. Guard: Prevent silently overriding an active focus session
+    const existingSession = focusManager.getFocus(guildId, user.id);
+    if (existingSession) {
+      const endsTimestamp = Math.floor(existingSession.phaseEndsAt.getTime() / 1000);
+      const isWork = existingSession.phase === 'work';
+
+      await interaction.reply({
+        content:
+          `⚠️ You already have an active focus ${isWork ? 'sprint' : 'break'} running on *"${existingSession.task}"*!\n` +
+          `• Remaining: <t:${endsTimestamp}:R> (<t:${endsTimestamp}:t>)\n` +
+          `• Status: \`${isWork ? 'Working Sprint' : 'Break Period'}\`\n\n` +
+          `Please wait until it ends or use \`/focus stop\` before starting a new focus sprint.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // 3. Parse durations (supports "25", "25m", "1h", "2h", "120", etc.)
+    const rawTimer = interaction.options.getString('timer');
+    const rawBreak = interaction.options.getString('break');
+
+    const workMinutes = parseDurationToMinutes(rawTimer, 25);
+    if (workMinutes === null) {
+      await interaction.reply({
+        content: '❌ Invalid timer format. Please specify a duration like `25m`, `1h`, `2h`, `90m`, or `120`.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const breakMinutes = parseBreakToMinutes(rawBreak, 5);
+    if (breakMinutes === null) {
+      await interaction.reply({
+        content: '❌ Invalid break format. Please specify a duration like `5m`, `10m`, or `0` to disable.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const task = interaction.options.getString('task')?.trim() || 'Deep Work';
 
     const session = await focusManager.startFocus({
       guildId,
@@ -88,18 +127,18 @@ export async function handleFocusCommand(
       .setColor(0xEF4444)
       .setTitle('🍅 Focus Sprint Started!')
       .setDescription(
-        `Focus mode engaged for **${workMinutes} minutes** in **#${member.voice.channel.name}**.\n` +
+        `Focus mode engaged for **${formatFocusDuration(workMinutes)}** in **#${member.voice.channel.name}**.\n` +
           `Stay focused, avoid distractions, and let\'s get things done!`
       )
       .addFields(
-        // Row 1: Task & Sprint Duration
+        // Row 1: Task & Timer Settings
         { name: '🎯 Focus Objective', value: `*${task}*`, inline: true },
-        { name: '⏱️ Sprint Interval', value: `\`${workMinutes}m work\` • \`${breakMinutes}m break\``, inline: true },
+        { name: '⏱️ Timer Settings', value: `\`${formatIntervalLabel(workMinutes, 'work')}\` • \`${formatIntervalLabel(breakMinutes, 'break')}\``, inline: true },
         { name: '\u200b', value: '\u200b', inline: true },
 
         // Row 2: Timer
         { name: '⏳ Sprint Ends', value: `<t:${endsTimestamp}:R> (<t:${endsTimestamp}:t>)`, inline: true },
-        { name: '💡 Tip', value: 'Use `/focus stop` anytime to finish early.', inline: true },
+        { name: '💡 Controls', value: 'Use `/focus status` to inspect or `/focus stop` to finish early.', inline: true },
         { name: '\u200b', value: '\u200b', inline: true }
       )
       .setFooter({ text: 'PurrTrack Pomodoro • Distraction-free voice tracking' })

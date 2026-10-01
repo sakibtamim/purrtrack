@@ -47,8 +47,8 @@ export class FocusManager {
    */
   async startFocus(options: StartFocusOptions): Promise<ActiveFocusSession> {
     const { guildId, userId, textChannelId, client } = options;
-    const workMinutes = Math.max(1, Math.min(180, options.workMinutes ?? 25));
-    const breakMinutes = Math.max(0, Math.min(60, options.breakMinutes ?? 5));
+    const workMinutes = Math.max(1, Math.min(240, options.workMinutes ?? 25));
+    const breakMinutes = Math.max(0, Math.min(120, options.breakMinutes ?? 5));
     const task = options.task?.trim() || 'Deep Work';
 
     // Clear any existing focus

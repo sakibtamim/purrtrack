@@ -60,6 +60,19 @@ describe('FocusManager Engine', () => {
     expect(active?.task).toBe('Writing Compiler');
   });
 
+  it('defaults to 25m work and 5m break when timer options are omitted', async () => {
+    const session = await focusManager.startFocus({
+      guildId: 'guild-1',
+      userId: 'user-default',
+      textChannelId: 'chan-1',
+      client: mockClient,
+    });
+
+    expect(session.workMinutes).toBe(25);
+    expect(session.breakMinutes).toBe(5);
+    expect(session.task).toBe('Deep Work');
+  });
+
   it('stops an active focus session and reverts DB state', async () => {
     await focusManager.startFocus({
       guildId: 'guild-1',

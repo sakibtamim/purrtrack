@@ -73,6 +73,22 @@ export const aggregatedReportDataSchema = z.object({
   topChannels: z.array(topChannelItemSchema),
   topUsers: z.array(topUserItemSchema).optional(),
   sessions: z.array(reportSessionItemSchema),
+  contractorRate: z
+    .object({
+      hourlyRateCents: z.number().int().nonnegative(),
+      hourlyRateFormatted: z.string(),
+      currency: z.string(),
+      totalPayableCents: z.number().int().nonnegative(),
+      totalPayableFormatted: z.string(),
+    })
+    .optional(),
+  manualAdjustments: z
+    .object({
+      netSeconds: z.number().int(),
+      netFormatted: z.string(),
+      count: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 
 export type AggregatedReportData = z.infer<typeof aggregatedReportDataSchema>;

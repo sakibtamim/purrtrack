@@ -26,12 +26,12 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
         value: 'Admin tool to pull server-wide time tracking statistics, top voice channels, and team contributors.',
       },
       {
-        name: '🎯 `/goal view [target]` & `/goal set <hours>`',
-        value: 'Track your weekly voice commitment, visualize progress bars, and build daily active streaks.',
+        name: '🎯 `/goal view` • `/goal set` • `/goal reset`',
+        value: 'Commit to a weekly voice goal with active guardrail protection, monitor ASCII progress bars, and build daily active streaks.',
       },
       {
-        name: '🍅 `/focus start [work] [break] [task]`',
-        value: 'Run Pomodoro focus sprints while in voice channels with automated notifications and distraction-free tracking.',
+        name: '🍅 `/focus start [timer] [break] [task]`',
+        value: 'Run Pomodoro focus sprints while in voice channels (default: 25m work, 5m break) with automated notifications and distraction-free tracking.',
       },
       {
         name: '⚙️ `/config view` & `/config set`',

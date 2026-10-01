@@ -119,6 +119,8 @@ PurrTrack includes an integrated productivity and habit-building system directly
 
 ### 1. Weekly Voice Goals & Streaks (`/goal`)
 * **`/goal set [target_hours:<1-168>] [week_start:<day>]`**: Configure your personal weekly voice time commitment and choose your preferred cycle start day (e.g. Monday for ISO standard, Sunday for US/CA/JP, Saturday for Middle East/Bangladesh/Islamic calendar).
+  * **Active Goal Guard Rail**: Once activated, an in-progress goal cannot be overwritten mid-cycle until you **finish it (100%)** or until the weekly cycle resets at 00:00 UTC.
+* **`/goal reset`**: Cancel or forfeit your active weekly goal early if unexpected events prevent you from completing it. Your recorded voice hours and streaks remain safe.
 * **`/goal view [target: Member]`**: Displays weekly progress towards your goal:
   * Dynamic visual ASCII progress bar: `[████████░░] 80.0% (16h 00m / 20h 00m)`.
   * Week countdown timeline: Tracks remaining hours and days until your custom week start day 00:00 UTC reset.
@@ -126,8 +128,11 @@ PurrTrack includes an integrated productivity and habit-building system directly
   * In-database historical streak backfilling ensures existing active members maintain their current streaks automatically.
 
 ### 2. Pomodoro Focus Sprints (`/focus`)
-* **`/focus start [work: 25] [break: 5] [task: "Refactoring API"]`**:
+* **`/focus start [timer: "25m"] [break: "5m"] [task: "Refactoring API"]`**:
   * Engages distraction-free focus tracking while in a voice channel.
+  * **Flexible Duration Input**: Accepts hours or minutes (e.g. `2h`, `1.5h`, `90m`, `120`, or `25m`). Displays clean hour formatting (e.g. `2 hours` / `2h work`).
+  * **Smart Defaults**: Defaults to 25 minutes work and 5 minutes break if timer options are omitted. Supports custom manual timers up to 240 minutes (4 hours).
+  * **Active Sprint Protection**: Protects existing sessions from being overwritten. If you have an active sprint running, the bot prompts you with remaining time and asks you to wait or `/focus stop` before starting a new one.
   * Slices active voice segments with `isFocus: true` and attaches the custom focus task description.
   * Automated completion alerts:
     * Work sprint completes: Sends an in-channel or DM notification reminding the user to take their break (`☕`).
@@ -308,7 +313,8 @@ pnpm dev
 | `/status` | — | `[target: Member]` | Self (Public) / Target (Manager) | Displays real-time live elapsed duration for current voice session, active channel, voice status, and media state (screen share & camera) in a balanced 2-column layout. |
 | `/goal` | `view` | `[target: Member]` | Public | View current weekly goal progress, visual ASCII progress bar (`[████████░░]`), countdown to reset, and active daily streak. |
 | `/goal` | `set` | `[target_hours: Number]`, `[week_start: Day]` | Self | Set your personal weekly voice target (1h – 168h) and preferred week start day (Monday, Sunday, Saturday, etc.). |
-| `/focus` | `start` | `[work: Number]`, `[break: Number]`, `[task: String]` | Public (Connected in Voice) | Starts a Pomodoro focus sprint with automated completion alerts and distraction-free tracking. |
+| `/goal` | `reset` | — | Self | Cancel or forfeit your active weekly goal early. |
+| `/focus` | `start` | `[timer: String]`, `[break: String]`, `[task: String]` | Public (Connected in Voice) | Starts a Pomodoro focus sprint (default: 25m work, 5m break) with automated completion alerts and distraction-free tracking. |
 | `/focus` | `stop` | — | Public | Ends active focus session early and reports completed focus time. |
 | `/focus` | `status` | — | Public | Checks remaining sprint time and active phase (work sprint vs break). |
 | `/report` | `user` | `target: Member`, `[format: Format]`, `[range: Range]` | Self (Public) / Target (Manager) | Generates an individual timesheet in Excel, PDF, CSV, JSON, or Embed. Regular members can only view their own report. |

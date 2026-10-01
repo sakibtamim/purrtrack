@@ -186,6 +186,25 @@ export class VoiceSessionRepository {
   }
 
   /**
+   * Set focus mode state on the active segment of a session
+   */
+  async setSegmentFocus(sessionId: string, isFocus: boolean, focusTask?: string): Promise<SessionSegmentRow | null> {
+    const activeSegment = await this.getActiveSegment(sessionId);
+    if (!activeSegment) return null;
+
+    const [updated] = await this.database
+      .update(sessionSegments)
+      .set({
+        isFocus,
+        focusTask: isFocus ? (focusTask ?? activeSegment.focusTask) : null,
+      })
+      .where(eq(sessionSegments.id, activeSegment.id))
+      .returning();
+
+    return updated || null;
+  }
+
+  /**
    * Handle channel switch: closes current segment and creates new segment
    */
   async switchChannel(params: SwitchChannelParams): Promise<SessionSegmentRow> {

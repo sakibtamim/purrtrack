@@ -17,6 +17,8 @@ export const sessionSegments = pgTable(
     wasDeafened: boolean('was_deafened').notNull().default(false),
     wasStreaming: boolean('was_streaming').notNull().default(false),
     wasVideo: boolean('was_video').notNull().default(false),
+    isFocus: boolean('is_focus').notNull().default(false),
+    focusTask: varchar('focus_task', { length: 255 }),
   },
   (table) => [
     index('session_segments_session_id_idx').on(table.sessionId),

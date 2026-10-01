@@ -156,4 +156,64 @@ describe('PostgreSQL Repositories Integration Suite', () => {
     // Clean up session
     await sessionRepo.endSession({ sessionId: startResult.session.id });
   });
+
+  it('VoiceSession: sets focus mode and task on active segment', async () => {
+    const userFocusTest = `user_focus_${Date.now()}`;
+    const startResult = await sessionRepo.startSession({
+      guildId: testGuildId,
+      userId: userFocusTest,
+      channelId: testChannel1,
+      channelName: 'Study Hall',
+    });
+
+    const focused = await sessionRepo.setSegmentFocus(startResult.session.id, true, 'Deep Work on API');
+    expect(focused).toBeDefined();
+    expect(focused!.isFocus).toBe(true);
+    expect(focused!.focusTask).toBe('Deep Work on API');
+
+    const unfocused = await sessionRepo.setSegmentFocus(startResult.session.id, false);
+    expect(unfocused).toBeDefined();
+    expect(unfocused!.isFocus).toBe(false);
+    expect(unfocused!.focusTask).toBeNull();
+
+    await sessionRepo.endSession({ sessionId: startResult.session.id });
+  });
+
+  it('UserGoals: manages goals, weekly targets, and daily streaks', async () => {
+    const { UserGoalsRepository } = await import('./user-goals-repository.js');
+    const goalsRepo = new UserGoalsRepository();
+    const userGoalTest = `user_goal_${Date.now()}`;
+
+    // Default goal creation
+    const defaultGoal = await goalsRepo.getOrCreateGoal(testGuildId, userGoalTest);
+    expect(defaultGoal.weeklyTargetSeconds).toBe(72000); // 20 hours
+    expect(defaultGoal.weekStartDay).toBe('monday');
+    expect(defaultGoal.currentStreakDays).toBe(0);
+
+    // Update target to 30 hours and week start to saturday
+    const updated = await goalsRepo.setGoal({
+      guildId: testGuildId,
+      userId: userGoalTest,
+      targetHours: 30,
+      weekStartDay: 'saturday',
+    });
+    expect(updated.weeklyTargetSeconds).toBe(30 * 3600);
+    expect(updated.weekStartDay).toBe('saturday');
+
+    // Record activity today
+    const now = new Date();
+    const withActivity = await goalsRepo.recordActivityAndStreak(testGuildId, userGoalTest, now);
+    expect(withActivity.currentStreakDays).toBeGreaterThanOrEqual(1);
+    expect(withActivity.lastActiveDate).toBe(now.toISOString().slice(0, 10));
+
+    // Calling recordActivityAndStreak on same day preserves streak
+    const sameDay = await goalsRepo.recordActivityAndStreak(testGuildId, userGoalTest, now);
+    expect(sameDay.currentStreakDays).toBe(withActivity.currentStreakDays);
+
+    // Calling on next day increments streak
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const nextDay = await goalsRepo.recordActivityAndStreak(testGuildId, userGoalTest, tomorrow);
+    expect(nextDay.currentStreakDays).toBe(withActivity.currentStreakDays + 1);
+  });
 });
+

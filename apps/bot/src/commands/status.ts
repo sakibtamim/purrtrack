@@ -129,22 +129,61 @@ export async function handleStatusCommand(
     });
   }
 
-  const mediaIndicators = [
-    `🎙️ Mic: ${isMuted ? '🔇 Muted' : '🟢 Active'}`,
-    `🎧 Audio: ${isDeafened ? '🔇 Deafened' : '🟢 Listening'}`,
-    `🖥️ Screen: ${isStreaming ? '🟢 Sharing' : '⚪ Off'}`,
-    `📹 Camera: ${isVideo ? '🟢 ON' : '⚪ Off'}`,
-  ].join(' • ');
+  const startedUnix = Math.floor(new Date(activeSession.startedAt).getTime() / 1000);
+  const userAvatar = targetUser.displayAvatarURL ? targetUser.displayAvatarURL({ size: 128 }) : undefined;
+  const userTag = targetUser.displayName ? `${targetUser.displayName} (@${targetUser.username})` : `@${targetUser.username}`;
 
   const embed = new EmbedBuilder()
-    .setColor(0x57f287) // Green
-    .setTitle(`🟢 Live Voice Session: ${targetUser.username}`)
-    .setDescription(`Tracking is **active** in **#${currentChannel}**.`)
+    .setColor(0x57f287) // Discord Green
+    .setAuthor({
+      name: userTag,
+      iconURL: userAvatar,
+    })
+    .setTitle(`🟢 Active Voice Tracking`)
+    .setDescription(`Connected to **#${currentChannel}**`)
+    .setThumbnail(userAvatar || null)
     .addFields(
-      { name: 'Total Session Duration', value: `\`${formatDuration(sessionElapsedSeconds)}\``, inline: true },
-      { name: 'Current Channel Duration', value: `\`${formatDuration(segmentElapsedSeconds)}\``, inline: true },
-      { name: 'Live Activity & Media', value: mediaIndicators, inline: false },
-      { name: 'Started At (UTC)', value: new Date(activeSession.startedAt).toUTCString(), inline: false }
+      {
+        name: '⏱️ Total Session',
+        value: `\`${formatDuration(sessionElapsedSeconds)}\``,
+        inline: true,
+      },
+      {
+        name: '🔊 In Channel',
+        value: `\`${formatDuration(segmentElapsedSeconds)}\``,
+        inline: true,
+      },
+      {
+        name: '\u200b',
+        value: '\u200b',
+        inline: true,
+      },
+      {
+        name: '🎙️ Voice & Audio',
+        value: [
+          `Mic: **${isMuted ? '🔇 Muted' : '🟢 Active'}**`,
+          `Audio: **${isDeafened ? '🔇 Deafened' : '🟢 Listening'}**`,
+        ].join('\n'),
+        inline: true,
+      },
+      {
+        name: '📺 Media & Video',
+        value: [
+          `Screen: **${isStreaming ? '🟢 Sharing' : '⚪ Off'}**`,
+          `Camera: **${isVideo ? '🟢 ON' : '⚪ Off'}**`,
+        ].join('\n'),
+        inline: true,
+      },
+      {
+        name: '\u200b',
+        value: '\u200b',
+        inline: true,
+      },
+      {
+        name: '🕒 Session Started',
+        value: `<t:${startedUnix}:F> (<t:${startedUnix}:R>)`,
+        inline: false,
+      }
     )
     .setFooter({ text: 'PurrTrack • TimeTrack for Discord' })
     .setTimestamp();

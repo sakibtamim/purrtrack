@@ -146,10 +146,10 @@ export class VoiceTracker {
       userId,
       channelId,
       channelName,
-      wasMuted: state.selfMute || state.serverMute || false,
-      wasDeafened: state.selfDeaf || state.serverDeaf || false,
-      wasStreaming: state.streaming || false,
-      wasVideo: state.selfVideo || false,
+      wasMuted: Boolean(state.selfMute || state.serverMute || state.mute),
+      wasDeafened: Boolean(state.selfDeaf || state.serverDeaf || state.deaf),
+      wasStreaming: Boolean(state.streaming),
+      wasVideo: Boolean(state.selfVideo),
     });
   }
 
@@ -230,10 +230,10 @@ export class VoiceTracker {
         sessionId: active.id,
         newChannelId: channelId,
         newChannelName: channelName,
-        wasMuted: state.selfMute || state.serverMute || false,
-        wasDeafened: state.selfDeaf || state.serverDeaf || false,
-        wasStreaming: state.streaming || false,
-        wasVideo: state.selfVideo || false,
+        wasMuted: Boolean(state.selfMute || state.serverMute || state.mute),
+        wasDeafened: Boolean(state.selfDeaf || state.serverDeaf || state.deaf),
+        wasStreaming: Boolean(state.streaming),
+        wasVideo: Boolean(state.selfVideo),
       });
     } else {
       // Re-initiate if session was missing
@@ -243,10 +243,10 @@ export class VoiceTracker {
         userId,
         channelId,
         channelName,
-        wasMuted: state.selfMute || state.serverMute || false,
-        wasDeafened: state.selfDeaf || state.serverDeaf || false,
-        wasStreaming: state.streaming || false,
-        wasVideo: state.selfVideo || false,
+        wasMuted: Boolean(state.selfMute || state.serverMute || state.mute),
+        wasDeafened: Boolean(state.selfDeaf || state.serverDeaf || state.deaf),
+        wasStreaming: Boolean(state.streaming),
+        wasVideo: Boolean(state.selfVideo),
       });
     }
   }
@@ -258,10 +258,10 @@ export class VoiceTracker {
     oldState: VoiceState,
     newState: VoiceState
   ): Promise<void> {
-    const oldMuted = Boolean(oldState.selfMute || oldState.serverMute);
-    const newMuted = Boolean(newState.selfMute || newState.serverMute);
-    const oldDeafened = Boolean(oldState.selfDeaf || oldState.serverDeaf);
-    const newDeafened = Boolean(newState.selfDeaf || newState.serverDeaf);
+    const oldMuted = Boolean(oldState.selfMute || oldState.serverMute || oldState.mute);
+    const newMuted = Boolean(newState.selfMute || newState.serverMute || newState.mute);
+    const oldDeafened = Boolean(oldState.selfDeaf || oldState.serverDeaf || oldState.deaf);
+    const newDeafened = Boolean(newState.selfDeaf || newState.serverDeaf || newState.deaf);
     const oldStreaming = Boolean(oldState.streaming);
     const newStreaming = Boolean(newState.streaming);
     const oldVideo = Boolean(oldState.selfVideo);

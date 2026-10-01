@@ -257,7 +257,28 @@ export class VoiceSessionRepository {
         .limit(1);
 
       if (!activeSegment) {
-        return null;
+        const [session] = await tx
+          .select()
+          .from(voiceSessions)
+          .where(eq(voiceSessions.id, params.sessionId))
+          .limit(1);
+
+        if (!session) return null;
+
+        const [createdSegment] = await tx
+          .insert(sessionSegments)
+          .values({
+            sessionId: params.sessionId,
+            channelId: session.initialChannelId,
+            channelName: 'Voice Channel',
+            startedAt: timestamp,
+            wasMuted: params.wasMuted ?? false,
+            wasDeafened: params.wasDeafened ?? false,
+            wasStreaming: params.wasStreaming ?? false,
+            wasVideo: params.wasVideo ?? false,
+          })
+          .returning();
+        return createdSegment;
       }
 
       const segDuration = Math.max(

@@ -19,7 +19,8 @@ export class VoiceTracker {
     private readonly sessionRepo: VoiceSessionRepository,
     private readonly settingsRepo: GuildSettingsRepository,
     private readonly flapGraceSeconds: number = 5,
-    private readonly userGoalsRepo?: UserGoalsRepository
+    private readonly userGoalsRepo?: UserGoalsRepository,
+    private readonly badgeManager?: any
   ) {}
 
   private getKey(guildId: string, userId: string): string {
@@ -97,7 +98,7 @@ export class VoiceTracker {
 
     // Event 2: User disconnected from voice (or moved to ignored/AFK channel)
     if (oldChannelId && !isOldIgnored && (!newChannelId || isNewIgnored)) {
-      await this.handleLeave(guildId, userId, username, key);
+      await this.handleLeave(guildId, userId, username, key, guild, member);
       return;
     }
 
@@ -158,7 +159,9 @@ export class VoiceTracker {
     guildId: string,
     userId: string,
     username: string,
-    key: string
+    key: string,
+    guild?: any,
+    member?: any
   ): Promise<void> {
     const active = await this.sessionRepo.getActiveSession(guildId, userId);
     if (!active) return;
@@ -187,6 +190,10 @@ export class VoiceTracker {
             await this.userGoalsRepo.recordActivityAndStreak(guildId, userId, leaveTime).catch((e) => {
               logger.warn(`[tracker] Failed to record streak for user ${userId}:`, e);
             });
+          }
+
+          if (this.badgeManager && (finalized.durationSeconds ?? 0) >= 30) {
+            await this.badgeManager.evaluateAndUnlock({ guildId, userId }).catch(() => {});
           }
         }
       } catch (err) {

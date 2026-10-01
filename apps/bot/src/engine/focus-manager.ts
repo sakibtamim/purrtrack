@@ -1,7 +1,8 @@
 import { Client, TextChannel, User } from 'discord.js';
-import { VoiceSessionRepository } from '@purrtrack/db';
+import { VoiceSessionRepository, UserGoalsRepository } from '@purrtrack/db';
 import { formatDuration } from '@purrtrack/shared';
 import { logger } from '../core/logger.js';
+import type { BadgeManager } from './badge-manager.js';
 
 export interface StartFocusOptions {
   guildId: string;
@@ -29,7 +30,11 @@ export interface ActiveFocusSession {
 export class FocusManager {
   private activeFocus = new Map<string, ActiveFocusSession>();
 
-  constructor(private readonly sessionRepo: VoiceSessionRepository) {}
+  constructor(
+    private readonly sessionRepo: VoiceSessionRepository,
+    private readonly goalsRepo?: UserGoalsRepository,
+    private readonly badgeManager?: BadgeManager
+  ) {}
 
   private getKey(guildId: string, userId: string): string {
     return `${guildId}:${userId}`;
@@ -102,6 +107,23 @@ export class FocusManager {
           ? ` Take a **${breakMinutes}m** break! ☕`
           : ` Ready for your next session?`)
     );
+
+    // Increment completed sprints and evaluate focus badges
+    if (this.goalsRepo) {
+      await this.goalsRepo.incrementCompletedFocusSprints(guildId, userId).catch(() => {});
+    }
+
+    if (this.badgeManager) {
+      await this.badgeManager
+        .evaluateAndUnlock({
+          guildId,
+          userId,
+          channelId: textChannelId,
+          client,
+          longestSprintSeconds: workMinutes * 60,
+        })
+        .catch(() => {});
+    }
 
     if (breakMinutes <= 0) {
       this.stopFocus(guildId, userId, true);

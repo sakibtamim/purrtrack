@@ -26,7 +26,10 @@
 - [100% Success Invariants](#-100-success-invariants)
 - [Productivity Suite (Goals & Focus Sprints)](#-productivity-suite-goals--focus-sprints)
 - [Gamification, Badges & Community Leaderboard](#-gamification-badges--community-leaderboard)
+- [Contractor Billing & Invoicing Engine](#-contractor-billing--invoicing-engine)
+- [Manual Time Adjustments & Audit Trail](#-manual-time-adjustments--audit-trail)
 - [Screen Share & Webcam Media Tracking](#-screen-share--webcam-media-tracking)
+- [Inactivity Sleep Guard & Auto-Move](#-inactivity-sleep-guard--auto-move)
 - [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Multi-Format Reporting Engine](#-multi-format-reporting-engine)
 - [Monorepo Workspace Structure](#-monorepo-workspace-structure)
@@ -184,6 +187,48 @@ PurrTrack operates on an automatic monthly competition cycle:
 
 ---
 
+## 💵 Contractor Billing & Invoicing Engine
+
+PurrTrack bridges Discord voice collaboration with professional contractor management, automated timesheets, and itemized PDF invoices:
+
+### 1. Hourly Rate Configuration (`/config rate_*`)
+* **`/config rate_set user:@member hourly_rate:500 [currency:BDT]`**: Configure an hourly compensation rate for any team member or contractor.
+  * **Default Currency**: Defaults to Bangladeshi Taka (`BDT`), but accepts any 3-letter ISO currency code (`USD`, `EUR`, `GBP`, `CAD`, etc.).
+  * **Zero Floating-Point Drift**: Hourly rates are stored internally in minor currency units (cents / poise) to eliminate financial rounding errors.
+  * **Strict Permission Boundaries**: Rates can only be set or removed by Server Admins and Management roles.
+* **`/config rate_remove user:@member`**: Revokes a configured billing rate.
+* **`/config rate_view [user:@member]`**: Inspect current hourly rate and currency:
+  * Regular contractors have **read-only access** to view their own rate.
+  * Server Admins & Managers can inspect any member's rate across the server.
+
+### 2. Multi-Format Contractor Invoicing
+Whenever a report is generated for a user with an active billing rate (`/report user target:@member`):
+* **📄 Official Contractor Invoice & Timesheet (PDF)**:
+  * Prominent **Invoice Header & Identifier**: Automatically generates unique invoice number `INV-YYYYMMDD-XXXX` with current date and payment due terms.
+  * **Contractor & Organization Metadata**: Highlights Contractor username, Discord User ID, Guild Name, and authorized manager.
+  * **Executive Billing Summary**: Clean KPI metric cards displaying Total Billable Hours, Configured Hourly Rate, Net Manual Adjustments, and **Total Amount Payable** in bold format.
+  * **Itemized Session Lines**: Every voice session includes duration, effective hourly rate, and line total amount.
+* **📊 Excel (.xlsx) & Embed Invoicing**:
+  * Excel exports append styled billing KPI summary cards and an `Amount ({currency})` column for each session line.
+  * Discord Embeds display contractor hourly rate, total compensation, and net manual adjustment badges.
+
+---
+
+## ⏱️ Manual Time Adjustments & Audit Trail
+
+Administrators and managers can adjust tracked time for team members with complete accountability and audit logging:
+
+* **Strict Admin/Manager Access**: Regular members cannot adjust time. Only authorized Admins and Management roles can apply credits or deductions.
+* **Flexible Duration Parsing**: Accepts human-readable durations such as `1h 30m`, `45m`, `2h`, `1.5h`, or raw minutes `90`.
+* **Historical & Backdated Adjustments**: Accepts an optional `[date]` argument (`YYYY-MM-DD`, `yesterday`, or `today` - defaults to today) so adjustments apply accurately to past timesheets and invoices.
+* **Commands**:
+  * **`/time add target:@member duration:"1h 30m" reason:"Meeting on Zoom" [date:"2026-10-01"]`**: Credits manual time to a user's timesheet.
+  * **`/time subtract target:@member duration:"45m" reason:"Accidental AFK voice stay" [date:"yesterday"]`**: Deducts manual time.
+  * **`/time history target:@member`**: Displays the 10 most recent time adjustments for a member, detailing credit/deduction amounts, reasons, effective dates, issuing manager, and relative Discord timestamps.
+* **Integrated Invoicing**: Net adjustment hours and amounts are factored dynamically into timesheet calculations, PDF invoices, and Excel workbooks.
+
+---
+
 ## 📹 Screen Share & Webcam Media Tracking
 
 PurrTrack tracks when members are actively presenting or collaborating visually:
@@ -192,6 +237,19 @@ PurrTrack tracks when members are actively presenting or collaborating visually:
 * **Live Status Grid**: `/status` renders a clean, balanced 2-column embed with native Discord relative timestamps, presenting `🎙️ Voice & Audio` (Mic & Deafen) and `📺 Media & Video` (Screen Share & Camera) side-by-side.
 * **Configurable Policies**: Admins can toggle `track_streaming` and `track_camera` via `/config set`.
 * **Ignored Channels**: Channels can be excluded from tracking entirely via `/config channel_ignore` and restored via `/config channel_unignore` with interactive autocomplete.
+
+---
+
+## 💤 Inactivity Sleep Guard & Auto-Move
+
+To prevent unattended voice channels from skewing timesheets, PurrTrack features an automated background inactivity watchdog:
+
+* **Configurable Threshold**: Admins can set the server inactivity limit via `/config set [max_inactive_minutes: 15-180]` (default: 60 minutes).
+* **Multi-Signal Inactivity Detection**: Evaluates voice mute state (`selfMute` or `serverMute`), screen sharing status (`streaming`), and camera status (`selfVideo`). If a user has been unmuted or streaming/presenting, their activity timer resets automatically.
+* **Dual-Action Fallback Policy**:
+  * **Auto-Move to AFK Channel**: If the server has a configured Discord AFK voice channel (`guild.afkChannelId`), inactive members are automatically transferred to the AFK channel.
+  * **Auto-Disconnect Fallback**: If no AFK channel exists or the server does not have one designated, the watchdog cleanly disconnects the idle member from voice.
+* **Guaranteed Timesheet Integrity**: In both cases, PurrTrack immediately finalizes and commits the database voice session at the exact moment of inactivity detection, ensuring idle hours are never billed or counted on reports.
 
 ---
 
@@ -218,9 +276,16 @@ Server Admins can designate any role as a **Management Role** (e.g. `@Engineerin
 | **`/goal view` (Self / Other)** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/goal set` (Personal Target)** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/focus start / stop / status`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/profile view / badges`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/profile equip / unequip`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/leaderboard`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/report user target:@self`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/report user target:@other_user`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
 | **`/report guild` (Server Timesheet)** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
+| **`/config rate_view target:@self`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/config rate_view target:@other_user`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
+| **`/config rate_set` / `rate_remove`** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
+| **`/time add` / `subtract` / `history`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
 | **`/config view`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
 | **`/config set` / `role_add` / `channel_ignore`** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
 
@@ -328,7 +393,7 @@ NODE_ENV="development"
 ### 4. Deploy Slash Commands to Discord
 
 ```bash
-# Clears any legacy guild duplicates and registers 5 global slash commands
+# Clears any legacy guild duplicates and registers 10 global slash commands
 pnpm deploy:commands
 ```
 
@@ -359,9 +424,16 @@ pnpm dev
 | `/focus` | `start` | `[timer: String]`, `[break: String]`, `[task: String]` | Public (Connected in Voice) | Starts a Pomodoro focus sprint (default: 25m work, 5m break) with automated completion alerts and distraction-free tracking. |
 | `/focus` | `stop` | — | Public | Ends active focus session early and reports completed focus time. |
 | `/focus` | `status` | — | Public | Checks remaining sprint time and active phase (work sprint vs break). |
-| `/report` | `user` | `target: Member`, `[format: Format]`, `[range: Range]` | Self (Public) / Target (Manager) | Generates an individual timesheet in Excel, PDF, CSV, JSON, or Embed. Regular members can only view their own report. |
-| `/report` | `guild` | `[format: Format]`, `[range: Range]` | Admin / Manager | Generates an aggregated timesheet and leaderboard across all voice channels for the entire server. |
+| `/report` | `user` | `target: Member`, `[format]`, `[range]`, `[start_date]`, `[end_date]` | Self (Public) / Target (Manager) | Generates an individual timesheet in Excel, PDF, CSV, JSON, or Embed. Supports presets or custom dates/months (`YYYY-MM` or `YYYY-MM-DD`). If user has a contractor rate, PDF generates an official Invoice. Regular members can only view their own report. |
+| `/report` | `guild` | `[format]`, `[range]`, `[start_date]`, `[end_date]` | Admin / Manager | Generates an aggregated timesheet and leaderboard across all voice channels for the entire server with custom date/month range support. |
+| `/time` | `add` | `target: Member`, `duration: String`, `reason: String`, `[date: String]` | Admin / Manager | Manually credits time to a user (e.g. `1h 30m`, `45m`) with audit reason and optional backdate (`YYYY-MM-DD`, `yesterday`, or `today`). |
+| `/time` | `subtract` | `target: Member`, `duration: String`, `reason: String`, `[date: String]` | Admin / Manager | Manually deducts time from a user with audit reason and optional backdate. |
+| `/time` | `history` | `target: Member` | Admin / Manager | Displays the 10 most recent time adjustments applied to a member. |
 | `/config` | `view` | — | Admin / Manager | Inspects current server tracking settings, ignored channels, and designated management roles. |
+| `/config` | `set` | `[track_streaming]`, `[track_camera]`, `[max_inactive_minutes]` | Admin / Owner | Configures server tracking policies and AFK/inactivity threshold (15-180m). |
+| `/config` | `rate_set` | `user: Member`, `hourly_rate: Number`, `[currency: String]` | Admin / Owner | Sets contractor hourly rate (default currency: BDT, or custom ISO code). |
+| `/config` | `rate_remove` | `user: Member` | Admin / Owner | Removes contractor hourly rate. |
+| `/config` | `rate_view` | `[user: Member]` | Self (Contractor) / Target (Manager) | Checks configured contractor rate and currency (read-only for members). |
 | `/config` | `role_add` | `role: Role` | Admin / Owner | Grants Management permissions to a role (allows inspecting other users and pulling server-wide reports). |
 | `/config` | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
 | `/config` | `channel_ignore` | `channel: Channel` | Admin / Owner | Adds a voice channel to the ignore list (bypasses tracking). |
@@ -395,7 +467,7 @@ pnpm dev
 PurrTrack adheres to strict engineering standards. All pull requests and commits are verified against automated unit and integration tests:
 
 ```bash
-# Run complete test suite (38 unit & database integration tests across 5 suites)
+# Run complete test suite (79 unit & database integration tests across 8 suites)
 pnpm test
 
 # Run TypeScript compiler checks across all workspace packages

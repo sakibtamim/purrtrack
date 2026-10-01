@@ -14,6 +14,9 @@ interface PendingLeave {
 export class VoiceTracker {
   // In-memory grace window (5s) for anti-flap protection: key is "guildId:userId"
   private pendingLeaves: Map<string, PendingLeave> = new Map();
+  // In-memory activity timestamp for inactivity sleep guard
+  private lastActiveMap: Map<string, number> = new Map();
+  private watchdogTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly sessionRepo: VoiceSessionRepository,
@@ -324,5 +327,100 @@ export class VoiceTracker {
       }
     }
     this.pendingLeaves.clear();
+  }
+
+  /**
+   * Start periodic inactivity watchdog (runs every 60s)
+   */
+  startInactivityWatchdog(client: any, intervalMs: number = 60000): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+    }
+    this.watchdogTimer = setInterval(() => {
+      this.checkInactivity(client).catch((err) => {
+        logger.error('[tracker] Inactivity watchdog error:', err);
+      });
+    }, intervalMs);
+    logger.info('🛡️ [tracker] Inactivity sleep guard watchdog started.');
+  }
+
+  /**
+   * Stop inactivity watchdog (on graceful exit)
+   */
+  stopInactivityWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = undefined;
+    }
+  }
+
+  /**
+   * Evaluate all active connected voice members against the guild maxInactiveMinutes policy
+   */
+  async checkInactivity(client: any): Promise<void> {
+    if (!client?.guilds?.cache) return;
+
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const settings = await this.settingsRepo.getSettings(guild.id);
+        if (!settings.trackingEnabled || !settings.maxInactiveMinutes || settings.maxInactiveMinutes <= 0) {
+          continue;
+        }
+
+        const thresholdMs = settings.maxInactiveMinutes * 60 * 1000;
+        const now = Date.now();
+
+        for (const voiceState of guild.voiceStates.cache.values()) {
+          if (!voiceState.channelId) continue;
+          if (voiceState.member?.user?.bot) continue;
+
+          // Skip if already in AFK channel or ignored
+          if (settings.excludeAfk && guild.afkChannelId && voiceState.channelId === guild.afkChannelId) continue;
+          if (settings.ignoredChannelIds && settings.ignoredChannelIds.includes(voiceState.channelId)) continue;
+
+          const isMuted = Boolean(voiceState.selfMute || voiceState.serverMute || voiceState.mute);
+          const isDeaf = Boolean(voiceState.selfDeaf || voiceState.serverDeaf || voiceState.deaf);
+          const isStreaming = Boolean(voiceState.streaming);
+          const isVideo = Boolean(voiceState.selfVideo);
+
+          const key = this.getKey(guild.id, voiceState.id);
+
+          if (isMuted && isDeaf && !isStreaming && !isVideo) {
+            const lastActive = this.lastActiveMap.get(key) || now;
+            if (!this.lastActiveMap.has(key)) {
+              this.lastActiveMap.set(key, lastActive);
+            }
+
+            if (now - lastActive >= thresholdMs) {
+              const active = await this.sessionRepo.getActiveSession(guild.id, voiceState.id);
+              if (!active) continue;
+
+              const member = voiceState.member;
+              const displayName = member?.displayName || voiceState.id;
+              logger.info(`😴 [tracker] Member ${displayName} reached inactivity limit (${settings.maxInactiveMinutes}m) in ${guild.name}.`);
+
+              // Case A: AFK channel exists
+              if (guild.afkChannelId && voiceState.channelId !== guild.afkChannelId) {
+                await member?.voice?.setChannel(guild.afkChannelId).catch(() => null);
+              } else {
+                // Case B: No AFK channel -> attempt voice disconnect
+                await member?.voice?.disconnect('PurrTrack: Inactivity sleep guard').catch(() => null);
+              }
+
+              // Finalize session in DB to stop ticking
+              await this.sessionRepo.endSession({
+                sessionId: active.id,
+                endedAt: new Date(),
+              });
+              this.lastActiveMap.delete(key);
+            }
+          } else {
+            this.lastActiveMap.set(key, now);
+          }
+        }
+      } catch (err) {
+        logger.error(`[tracker] Error checking inactivity for guild ${guild.id}:`, err);
+      }
+    }
   }
 }

@@ -174,4 +174,114 @@ describe('VoiceTracker Engine & Anti-Flap Protection', () => {
 
     expect(mockSessionRepo.startSession).not.toHaveBeenCalled();
   });
+
+  it('Inactivity Watchdog: moves inactive member to AFK channel and ends session', async () => {
+    mockSettingsRepo.getSettings.mockResolvedValue({
+      trackingEnabled: true,
+      maxInactiveMinutes: 60,
+      excludeAfk: true,
+    });
+
+    const mockSetChannel = vi.fn().mockResolvedValue(undefined);
+    const mockDisconnect = vi.fn().mockResolvedValue(undefined);
+
+    const mockMember = {
+      id: 'user-inactive',
+      displayName: 'Sleeping Member',
+      voice: {
+        setChannel: mockSetChannel,
+        disconnect: mockDisconnect,
+      },
+    };
+
+    const mockVoiceState = {
+      id: 'user-inactive',
+      channelId: 'vc-active',
+      selfMute: true,
+      selfDeaf: true,
+      member: mockMember,
+    };
+
+    const mockGuild = {
+      id: 'g-1',
+      name: 'Test Guild',
+      afkChannelId: 'afk-channel-1',
+      voiceStates: {
+        cache: new Map([['user-inactive', mockVoiceState]]),
+      },
+    };
+
+    const mockClient = {
+      guilds: {
+        cache: new Map([['g-1', mockGuild]]),
+      },
+    };
+
+    // First check registers lastActive timestamp
+    await tracker.checkInactivity(mockClient);
+    expect(mockSetChannel).not.toHaveBeenCalled();
+
+    // Advance time by 61 minutes
+    vi.advanceTimersByTime(61 * 60 * 1000);
+
+    // Second check triggers inactivity move
+    await tracker.checkInactivity(mockClient);
+    expect(mockSetChannel).toHaveBeenCalledWith('afk-channel-1');
+    expect(mockSessionRepo.endSession).toHaveBeenCalled();
+  });
+
+  it('Inactivity Watchdog: disconnects member when no AFK channel is configured', async () => {
+    mockSettingsRepo.getSettings.mockResolvedValue({
+      trackingEnabled: true,
+      maxInactiveMinutes: 30,
+      excludeAfk: true,
+    });
+
+    const mockSetChannel = vi.fn().mockResolvedValue(undefined);
+    const mockDisconnect = vi.fn().mockResolvedValue(undefined);
+
+    const mockMember = {
+      id: 'user-no-afk',
+      displayName: 'Idle Member',
+      voice: {
+        setChannel: mockSetChannel,
+        disconnect: mockDisconnect,
+      },
+    };
+
+    const mockVoiceState = {
+      id: 'user-no-afk',
+      channelId: 'vc-active',
+      selfMute: true,
+      selfDeaf: true,
+      member: mockMember,
+    };
+
+    const mockGuild = {
+      id: 'g-2',
+      name: 'No AFK Guild',
+      afkChannelId: null,
+      voiceStates: {
+        cache: new Map([['user-no-afk', mockVoiceState]]),
+      },
+    };
+
+    const mockClient = {
+      guilds: {
+        cache: new Map([['g-2', mockGuild]]),
+      },
+    };
+
+    // First check registers timestamp
+    await tracker.checkInactivity(mockClient);
+    expect(mockDisconnect).not.toHaveBeenCalled();
+
+    // Advance time by 31 minutes
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    // Second check triggers disconnect
+    await tracker.checkInactivity(mockClient);
+    expect(mockDisconnect).toHaveBeenCalled();
+    expect(mockSessionRepo.endSession).toHaveBeenCalled();
+  });
 });

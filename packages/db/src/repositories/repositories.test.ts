@@ -189,16 +189,33 @@ describe('PostgreSQL Repositories Integration Suite', () => {
     expect(defaultGoal.weeklyTargetSeconds).toBe(72000); // 20 hours
     expect(defaultGoal.weekStartDay).toBe('monday');
     expect(defaultGoal.currentStreakDays).toBe(0);
+    expect(defaultGoal.hasActiveGoal).toBe(false);
 
     // Update target to 30 hours and week start to saturday
+    const cycleStart = new Date('2026-10-01T00:00:00Z');
     const updated = await goalsRepo.setGoal({
       guildId: testGuildId,
       userId: userGoalTest,
       targetHours: 30,
       weekStartDay: 'saturday',
+      cycleStartDate: cycleStart,
     });
     expect(updated.weeklyTargetSeconds).toBe(30 * 3600);
     expect(updated.weekStartDay).toBe('saturday');
+    expect(updated.hasActiveGoal).toBe(true);
+    expect(updated.cycleStartDate).toBeDefined();
+
+    // Reset goal
+    const reset = await goalsRepo.resetGoal(testGuildId, userGoalTest);
+    expect(reset).toBeDefined();
+    expect(reset!.hasActiveGoal).toBe(false);
+
+    // Reactivate goal
+    await goalsRepo.setGoal({
+      guildId: testGuildId,
+      userId: userGoalTest,
+      targetHours: 25,
+    });
 
     // Record activity today
     const now = new Date();

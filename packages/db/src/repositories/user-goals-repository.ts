@@ -8,6 +8,7 @@ export interface SetGoalParams {
   userId: string;
   targetHours?: number;
   weekStartDay?: string;
+  cycleStartDate?: Date;
 }
 
 export class UserGoalsRepository {
@@ -49,6 +50,7 @@ export class UserGoalsRepository {
         weeklyTargetSeconds: defaultSeconds,
         weekStartDay: defaultWeekStart.toLowerCase(),
         currentStreakDays: 0,
+        hasActiveGoal: false,
       })
       .onConflictDoUpdate({
         target: [userGoals.guildId, userGoals.userId],
@@ -65,10 +67,11 @@ export class UserGoalsRepository {
    * Set or update weekly goal target hours and/or week start day
    */
   async setGoal(params: SetGoalParams): Promise<UserGoalRow> {
-    const { guildId, userId, targetHours, weekStartDay } = params;
+    const { guildId, userId, targetHours, weekStartDay, cycleStartDate } = params;
     await this.getOrCreateGoal(guildId, userId);
 
     const updateSet: Record<string, any> = {
+      hasActiveGoal: true,
       updatedAt: new Date(),
     };
 
@@ -81,6 +84,10 @@ export class UserGoalsRepository {
       updateSet.weekStartDay = weekStartDay.toLowerCase();
     }
 
+    if (cycleStartDate !== undefined) {
+      updateSet.cycleStartDate = cycleStartDate;
+    }
+
     const [updated] = await this.database
       .update(userGoals)
       .set(updateSet)
@@ -91,15 +98,32 @@ export class UserGoalsRepository {
   }
 
   /**
+   * Reset or cancel active weekly goal
+   */
+  async resetGoal(guildId: string, userId: string): Promise<UserGoalRow | null> {
+    const [updated] = await this.database
+      .update(userGoals)
+      .set({
+        hasActiveGoal: false,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(userGoals.guildId, guildId), eq(userGoals.userId, userId)))
+      .returning();
+
+    return updated || null;
+  }
+
+  /**
    * Set or update weekly goal target in hours (1h - 168h) with optional week start day
    */
   async setWeeklyTarget(
     guildId: string,
     userId: string,
     targetHours: number,
-    weekStartDay?: string
+    weekStartDay?: string,
+    cycleStartDate?: Date
   ): Promise<UserGoalRow> {
-    return this.setGoal({ guildId, userId, targetHours, weekStartDay });
+    return this.setGoal({ guildId, userId, targetHours, weekStartDay, cycleStartDate });
   }
 
   /**

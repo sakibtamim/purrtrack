@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, integer, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, integer, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const userGoals = pgTable(
   'user_goals',
@@ -10,6 +10,8 @@ export const userGoals = pgTable(
     weekStartDay: varchar('week_start_day', { length: 16 }).notNull().default('monday'),
     currentStreakDays: integer('current_streak_days').notNull().default(0),
     lastActiveDate: varchar('last_active_date', { length: 10 }), // 'YYYY-MM-DD'
+    hasActiveGoal: boolean('has_active_goal').notNull().default(false),
+    cycleStartDate: timestamp('cycle_start_date', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

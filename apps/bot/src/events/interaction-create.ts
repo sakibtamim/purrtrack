@@ -4,9 +4,16 @@ import {
   GuildSettingsRepository,
   UserGoalsRepository,
   UserBadgesRepository,
+  ContractorRatesRepository,
+  TimeAdjustmentsRepository,
 } from '@purrtrack/db';
 import { FocusManager } from '../engine/focus-manager.js';
-import { dispatchSlashCommand, dispatchAutocomplete, handleLeaderboardButton } from '../commands/index.js';
+import {
+  dispatchSlashCommand,
+  dispatchAutocomplete,
+  handleLeaderboardButton,
+  handleStatusRefreshButton,
+} from '../commands/index.js';
 import { logger } from '../core/logger.js';
 
 export function registerInteractionCreate(
@@ -16,7 +23,9 @@ export function registerInteractionCreate(
   goalsRepo: UserGoalsRepository,
   focusManager: FocusManager,
   badgesRepo: UserBadgesRepository,
-  badgeManager?: any
+  badgeManager?: any,
+  ratesRepo?: ContractorRatesRepository,
+  timeRepo?: TimeAdjustmentsRepository
 ): void {
   client.on('interactionCreate', async (interaction: Interaction) => {
     if (interaction.isAutocomplete()) {
@@ -32,6 +41,8 @@ export function registerInteractionCreate(
       try {
         if (interaction.customId.startsWith('lb_')) {
           await handleLeaderboardButton(interaction, sessionRepo, goalsRepo);
+        } else if (interaction.customId.startsWith('status_refresh:')) {
+          await handleStatusRefreshButton(interaction, sessionRepo, settingsRepo, goalsRepo);
         }
       } catch (err) {
         logger.error('[events:interactionCreate] Button error:', err);
@@ -49,7 +60,9 @@ export function registerInteractionCreate(
         goalsRepo,
         focusManager,
         badgesRepo,
-        badgeManager
+        badgeManager,
+        ratesRepo,
+        timeRepo
       );
     } catch (err) {
       logger.error('[events:interactionCreate] Top-level interaction error:', err);

@@ -4,6 +4,8 @@ import {
   GuildSettingsRepository,
   UserGoalsRepository,
   UserBadgesRepository,
+  ContractorRatesRepository,
+  TimeAdjustmentsRepository,
 } from '@purrtrack/db';
 import { env, getEnv } from './config/env.js';
 import { logger } from './core/logger.js';
@@ -32,6 +34,8 @@ async function bootstrap(): Promise<void> {
   const settingsRepo = new GuildSettingsRepository();
   const goalsRepo = new UserGoalsRepository();
   const badgesRepo = new UserBadgesRepository();
+  const ratesRepo = new ContractorRatesRepository();
+  const timeRepo = new TimeAdjustmentsRepository();
 
   const badgeManager = new BadgeManager(sessionRepo, goalsRepo, badgesRepo);
   const focusManager = new FocusManager(sessionRepo, goalsRepo, badgeManager);
@@ -56,10 +60,14 @@ async function bootstrap(): Promise<void> {
 
   // 5. Register Process Signal & Graceful Exit Handlers
   registerGracefulExit(client, async () => {
+    voiceTracker.stopInactivityWatchdog();
     await voiceTracker.flushAllPending();
   });
 
-  // 6. Register Gateway Events
+  // 6. Start Inactivity Sleep Guard Watchdog
+  voiceTracker.startInactivityWatchdog(client, 60000);
+
+  // 7. Register Gateway Events
   registerReady(client, reconciler);
   registerVoiceStateUpdate(client, voiceTracker);
   registerInteractionCreate(
@@ -69,7 +77,9 @@ async function bootstrap(): Promise<void> {
     goalsRepo,
     focusManager,
     badgesRepo,
-    badgeManager
+    badgeManager,
+    ratesRepo,
+    timeRepo
   );
 
   // 7. Login to Discord

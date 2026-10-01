@@ -9,9 +9,11 @@ import {
   GuildSettingsRepository,
   UserGoalsRepository,
   UserBadgesRepository,
+  ContractorRatesRepository,
+  TimeAdjustmentsRepository,
 } from '@purrtrack/db';
 import { FocusManager } from '../engine/focus-manager.js';
-import { statusCommand, handleStatusCommand } from './status.js';
+import { statusCommand, handleStatusCommand, handleStatusRefreshButton } from './status.js';
 import { reportCommand, handleReportCommand } from './report.js';
 import { configCommand, handleConfigCommand, handleConfigAutocomplete } from './config.js';
 import { helpCommand, handleHelpCommand } from './help.js';
@@ -20,6 +22,7 @@ import { goalCommand, handleGoalCommand } from './goal.js';
 import { focusCommand, handleFocusCommand } from './focus.js';
 import { profileCommand, handleProfileCommand, handleProfileAutocomplete } from './profile.js';
 import { leaderboardCommand, handleLeaderboardCommand, handleLeaderboardButton } from './leaderboard.js';
+import { timeCommand, handleTimeCommand } from './time.js';
 import { logger } from '../core/logger.js';
 
 export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
@@ -31,6 +34,7 @@ export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = 
   focusCommand.toJSON(),
   profileCommand.toJSON(),
   leaderboardCommand.toJSON(),
+  timeCommand.toJSON(),
   helpCommand.toJSON(),
 ];
 
@@ -41,7 +45,9 @@ export async function dispatchSlashCommand(
   goalsRepo: UserGoalsRepository,
   focusManager: FocusManager,
   badgesRepo: UserBadgesRepository,
-  badgeManager?: any
+  badgeManager?: any,
+  ratesRepo?: ContractorRatesRepository,
+  timeRepo?: TimeAdjustmentsRepository
 ): Promise<void> {
   const { commandName, user } = interaction;
   logger.info(`⚡ [commands] /${commandName} invoked by @${user.username} (${user.id}) in guild ${interaction.guildId}`);
@@ -57,11 +63,19 @@ export async function dispatchSlashCommand(
         break;
 
       case 'report':
-        await handleReportCommand(interaction, sessionRepo, settingsRepo);
+        await handleReportCommand(interaction, sessionRepo, settingsRepo, ratesRepo, timeRepo);
         break;
 
       case 'config':
-        await handleConfigCommand(interaction, settingsRepo);
+        await handleConfigCommand(interaction, settingsRepo, ratesRepo);
+        break;
+
+      case 'time':
+        if (timeRepo) {
+          await handleTimeCommand(interaction, timeRepo, settingsRepo);
+        } else {
+          await interaction.reply({ content: '❌ Time adjustment service is currently unavailable.', ephemeral: true });
+        }
         break;
 
       case 'goal':
@@ -117,4 +131,4 @@ export async function dispatchAutocomplete(
   }
 }
 
-export { handleLeaderboardButton };
+export { handleLeaderboardButton, handleStatusRefreshButton };

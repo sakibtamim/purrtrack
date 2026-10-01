@@ -6,7 +6,7 @@ import {
   EmbedBuilder,
   ChannelType,
 } from 'discord.js';
-import { GuildSettingsRepository } from '@purrtrack/db';
+import { GuildSettingsRepository, ContractorRatesRepository } from '@purrtrack/db';
 import { logger } from '../core/logger.js';
 
 export const configCommand = new SlashCommandBuilder()
@@ -23,6 +23,12 @@ export const configCommand = new SlashCommandBuilder()
       .addBooleanOption((opt) => opt.setName('track_deafened').setDescription('Track time when user is deafened'))
       .addBooleanOption((opt) => opt.setName('track_streaming').setDescription('Track time when user is screen sharing'))
       .addBooleanOption((opt) => opt.setName('track_camera').setDescription('Track time when user has webcam / video enabled'))
+      .addIntegerOption((opt) =>
+        opt
+          .setName('max_inactive_minutes')
+          .setDescription('Inactivity limit (mins) before moving to AFK / disconnecting (0 to disable)')
+          .setMinValue(0)
+      )
       .addChannelOption((opt) =>
         opt
           .setName('announce_channel')
@@ -71,11 +77,53 @@ export const configCommand = new SlashCommandBuilder()
           .setRequired(true)
           .setAutocomplete(true)
       )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('rate_set')
+      .setDescription('Set or update a contractor hourly billing rate (Admin/Manager only)')
+      .addUserOption((opt) => opt.setName('target').setDescription('Target member/contractor').setRequired(true))
+      .addNumberOption((opt) =>
+        opt
+          .setName('rate')
+          .setDescription('Hourly billing rate amount (e.g. 500 or 35.50)')
+          .setMinValue(0)
+          .setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('currency')
+          .setDescription('Currency code (default: BDT)')
+          .setRequired(false)
+          .addChoices(
+            { name: '🇧🇩 BDT (৳ Bangladeshi Taka)', value: 'BDT' },
+            { name: '🇺🇸 USD ($ US Dollar)', value: 'USD' },
+            { name: '🇪🇺 EUR (€ Euro)', value: 'EUR' },
+            { name: '🇬🇧 GBP (£ British Pound)', value: 'GBP' },
+            { name: '🇨🇦 CAD (CA$ Canadian Dollar)', value: 'CAD' },
+            { name: '🇦🇺 AUD (A$ Australian Dollar)', value: 'AUD' },
+            { name: '🇮🇳 INR (₹ Indian Rupee)', value: 'INR' },
+            { name: '🇸🇬 SGD (S$ Singapore Dollar)', value: 'SGD' }
+          )
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('rate_remove')
+      .setDescription('Remove a contractor hourly billing rate (Admin/Manager only)')
+      .addUserOption((opt) => opt.setName('target').setDescription('Target member/contractor').setRequired(true))
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('rate_view')
+      .setDescription('View configured contractor billing rates (Read-only for self)')
+      .addUserOption((opt) => opt.setName('target').setDescription('Target member to inspect (Admin only)').setRequired(false))
   );
 
 export async function handleConfigCommand(
   interaction: ChatInputCommandInteraction,
-  settingsRepo: GuildSettingsRepository
+  settingsRepo: GuildSettingsRepository,
+  ratesRepo?: ContractorRatesRepository
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
@@ -112,6 +160,12 @@ export async function handleConfigCommand(
       ? settings.ignoredChannelIds.map((cId) => `<#${cId}>`).join(', ')
       : '*None (All voice channels tracked)*';
 
+    let ratesField = '*Available*';
+    if (ratesRepo) {
+      const allRates = await ratesRepo.listGuildRates(guild.id).catch(() => []);
+      ratesField = allRates.length > 0 ? `✅ ${allRates.length} member(s) configured` : '*None configured*';
+    }
+
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle(`⚙️ PurrTrack Settings: ${guild.name}`)
@@ -122,10 +176,20 @@ export async function handleConfigCommand(
         { name: 'Track While Deafened', value: settings.trackDeafened ? '✅ Yes' : '❌ No', inline: true },
         { name: 'Track Screen Share', value: settings.trackStreaming ? '✅ Yes' : '❌ No', inline: true },
         { name: 'Track Webcam Video', value: settings.trackCamera ? '✅ Yes' : '❌ No', inline: true },
+        {
+          name: 'Inactivity Sleep Guard',
+          value: settings.maxInactiveMinutes > 0 ? `✅ ${settings.maxInactiveMinutes}m (Auto-AFK/Disconnect)` : '❌ Disabled',
+          inline: true,
+        },
         { name: 'Server Timezone', value: `\`${settings.timezone}\``, inline: true },
         {
           name: 'Announcement Channel',
           value: settings.announceChannelId ? `<#${settings.announceChannelId}>` : 'None',
+          inline: true,
+        },
+        {
+          name: '💼 Contractor Rates',
+          value: ratesField,
           inline: true,
         },
         {
@@ -143,6 +207,110 @@ export async function handleConfigCommand(
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
+
+  // Rate View: Member can view their own rate; Admins/Managers can view anyone's
+  if (subcommand === 'rate_view') {
+    if (!ratesRepo) {
+      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', ephemeral: true });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser('target') || interaction.user;
+
+    if (targetUser.id !== interaction.user.id && !isAdmin && !isManager) {
+      await interaction.reply({
+        content: "⛔ You can only view your own configured billing rate. Inspecting other members' rates requires Admin permissions.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const rate = await ratesRepo.getRate(guild.id, targetUser.id);
+    if (!rate) {
+      const msg = targetUser.id === interaction.user.id
+        ? 'ℹ️ You do not have a configured contractor billing rate.'
+        : `ℹ️ <@${targetUser.id}> does not have a configured contractor billing rate.`;
+      await interaction.reply({ content: msg, ephemeral: true });
+      return;
+    }
+
+    const rateAmount = (rate.hourlyRateCents / 100).toFixed(2);
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle(`💼 Contractor Billing Rate: ${targetUser.username}`)
+      .setDescription(
+        `• **Member**: <@${targetUser.id}>\n` +
+        `• **Hourly Rate**: **${rateAmount} ${rate.currency} / hr**\n` +
+        `• **Last Updated**: <t:${Math.floor(new Date(rate.updatedAt).getTime() / 1000)}:R>\n` +
+        `• **Set By**: <@${rate.setByUserId}>`
+      )
+      .setFooter({ text: 'PurrTrack • Enterprise Payroll' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
+
+  // Rate Set: Admin / Manager only
+  if (subcommand === 'rate_set') {
+    if (!isAdmin && !isManager) {
+      await interaction.reply({
+        content: '⛔ Only Server Administrators and Management role members can set contractor rates.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!ratesRepo) {
+      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', ephemeral: true });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser('target', true);
+    const rate = interaction.options.getNumber('rate', true);
+    const currency = (interaction.options.getString('currency') || 'BDT').toUpperCase().trim();
+
+    const hourlyRateCents = Math.round(rate * 100);
+    await ratesRepo.setRate(guild.id, targetUser.id, hourlyRateCents, currency, interaction.user.id);
+
+    await interaction.reply({
+      content: `✅ Successfully configured billing rate for <@${targetUser.id}>: **${rate.toFixed(2)} ${currency} / hr**.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Rate Remove: Admin / Manager only
+  if (subcommand === 'rate_remove') {
+    if (!isAdmin && !isManager) {
+      await interaction.reply({
+        content: '⛔ Only Server Administrators and Management role members can remove contractor rates.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!ratesRepo) {
+      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', ephemeral: true });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser('target', true);
+    const removed = await ratesRepo.removeRate(guild.id, targetUser.id);
+
+    if (removed) {
+      await interaction.reply({
+        content: `✅ Removed contractor billing rate for <@${targetUser.id}>.`,
+        ephemeral: true,
+      });
+    } else {
+      await interaction.reply({
+        content: `ℹ️ <@${targetUser.id}> does not have a configured billing rate.`,
+        ephemeral: true,
+      });
+    }
     return;
   }
 
@@ -259,6 +427,7 @@ export async function handleConfigCommand(
     const trackDeafened = interaction.options.getBoolean('track_deafened');
     const trackStreaming = interaction.options.getBoolean('track_streaming');
     const trackCamera = interaction.options.getBoolean('track_camera');
+    const maxInactive = interaction.options.getInteger('max_inactive_minutes');
     const announceChannel = interaction.options.getChannel('announce_channel');
 
     const updates: Record<string, any> = {};
@@ -268,6 +437,7 @@ export async function handleConfigCommand(
     if (trackDeafened !== null) updates.trackDeafened = trackDeafened;
     if (trackStreaming !== null) updates.trackStreaming = trackStreaming;
     if (trackCamera !== null) updates.trackCamera = trackCamera;
+    if (maxInactive !== null) updates.maxInactiveMinutes = maxInactive;
     if (announceChannel !== null) updates.announceChannelId = announceChannel.id;
 
     if (Object.keys(updates).length === 0) {

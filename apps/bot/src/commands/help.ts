@@ -42,8 +42,12 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
         value: 'Interactive server leaderboard with Top 3 podiums (🥇🥈🥉), equipped titles, and button navigation (◀️ Prev, Next ▶️, 🎯 My Rank).',
       },
       {
-        name: '⚙️ `/config` (Server Admins)',
-        value: 'Configure tracking rules, toggle AFK/media settings, designate management roles, or manage ignored channels.',
+        name: '⏱️ `/time add` • `/time subtract` • `/time history` (Admins & Managers)',
+        value: 'Execute manual voice time adjustments with transparent business reasons, and inspect complete member audit histories.',
+      },
+      {
+        name: '⚙️ `/config` (Server Admins & Managers)',
+        value: 'Configure tracking rules, set contractor billing rates (`/config rate_set`), configure AFK sleep guard, designate management roles, or manage ignored channels.',
       }
     )
     .setFooter({ text: 'PurrTrack • Enterprise Voice Time Tracking' })

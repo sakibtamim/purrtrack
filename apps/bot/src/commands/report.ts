@@ -3,8 +3,8 @@ import {
   SlashCommandBuilder,
   PermissionFlagsBits,
 } from 'discord.js';
-import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
-import { ExportFormat, TimeRangePreset, resolveTimeRange } from '@purrtrack/shared';
+import { VoiceSessionRepository, GuildSettingsRepository, ContractorRatesRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
+import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration } from '@purrtrack/shared';
 import { exportReport } from '../exporters/index.js';
 
 const now = new Date();
@@ -36,7 +36,7 @@ export const reportCommand = new SlashCommandBuilder()
       .addStringOption((opt) =>
         opt
           .setName('range')
-          .setDescription('Date range preset')
+          .setDescription('Date range preset (ignored if start_date is set)')
           .setRequired(false)
           .addChoices(
             { name: 'Today', value: TimeRangePreset.TODAY },
@@ -47,6 +47,18 @@ export const reportCommand = new SlashCommandBuilder()
             { name: `${lastMonthLabel} (Last Month)`, value: TimeRangePreset.LAST_MONTH },
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('start_date')
+          .setDescription('Custom start date (YYYY-MM-DD, or YYYY-MM for whole month, e.g. 2026-09)')
+          .setRequired(false)
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('end_date')
+          .setDescription('Custom end date (YYYY-MM-DD, optional if start_date is a month)')
+          .setRequired(false)
       )
   )
   .addSubcommand((sub) =>
@@ -69,7 +81,7 @@ export const reportCommand = new SlashCommandBuilder()
       .addStringOption((opt) =>
         opt
           .setName('range')
-          .setDescription('Date range preset')
+          .setDescription('Date range preset (ignored if start_date is set)')
           .setRequired(false)
           .addChoices(
             { name: 'Today', value: TimeRangePreset.TODAY },
@@ -81,12 +93,122 @@ export const reportCommand = new SlashCommandBuilder()
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
       )
+      .addStringOption((opt) =>
+        opt
+          .setName('start_date')
+          .setDescription('Custom start date (YYYY-MM-DD, or YYYY-MM for whole month, e.g. 2026-09)')
+          .setRequired(false)
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('end_date')
+          .setDescription('Custom end date (YYYY-MM-DD, optional if start_date is a month)')
+          .setRequired(false)
+      )
   );
+
+/**
+ * Parses user-provided start/end dates into absolute UTC Date bounds.
+ * Supports:
+ * - YYYY-MM (e.g. "2026-09" -> entire month)
+ * - YYYY-MM-DD (e.g. "2026-09-15")
+ * - "yesterday", "today"
+ */
+export function parseCustomDateRange(
+  startStr?: string | null,
+  endStr?: string | null
+): { startDate: Date; endDate: Date; label: string } | null | 'INVALID' {
+  if (!startStr || !startStr.trim()) {
+    if (endStr && endStr.trim()) return 'INVALID';
+    return null;
+  }
+
+  const cleanedStart = startStr.trim().toLowerCase();
+  const cleanedEnd = endStr ? endStr.trim().toLowerCase() : null;
+
+  if (cleanedStart === 'today') {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    return { startDate: start, endDate: now, label: 'Today (Custom)' };
+  }
+
+  if (cleanedStart === 'yesterday') {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 23, 59, 59, 999));
+    return { startDate: start, endDate: end, label: 'Yesterday (Custom)' };
+  }
+
+  // Month format: YYYY-MM
+  const monthMatch = cleanedStart.match(/^(\d{4})-(\d{2})$/);
+  if (monthMatch && !cleanedEnd) {
+    const year = parseInt(monthMatch[1], 10);
+    const month = parseInt(monthMatch[2], 10) - 1;
+    if (month < 0 || month > 11) return 'INVALID';
+
+    const startDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+    const monthName = startDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    return { startDate, endDate, label: `${monthName} ${year}` };
+  }
+
+  // Date format: YYYY-MM-DD
+  const dateMatch = cleanedStart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dateMatch) return 'INVALID';
+
+  const sYear = parseInt(dateMatch[1], 10);
+  const sMonth = parseInt(dateMatch[2], 10) - 1;
+  const sDay = parseInt(dateMatch[3], 10);
+  const startDate = new Date(Date.UTC(sYear, sMonth, sDay, 0, 0, 0, 0));
+
+  if (isNaN(startDate.getTime()) || startDate.getUTCDate() !== sDay || startDate.getUTCMonth() !== sMonth) {
+    return 'INVALID';
+  }
+
+  let endDate: Date;
+  let label: string;
+
+  if (cleanedEnd) {
+    const endMonthMatch = cleanedEnd.match(/^(\d{4})-(\d{2})$/);
+    const endDateMatch = cleanedEnd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (endMonthMatch) {
+      const eYear = parseInt(endMonthMatch[1], 10);
+      const eMonth = parseInt(endMonthMatch[2], 10) - 1;
+      if (eMonth < 0 || eMonth > 11) return 'INVALID';
+      endDate = new Date(Date.UTC(eYear, eMonth + 1, 0, 23, 59, 59, 999));
+    } else if (endDateMatch) {
+      const eYear = parseInt(endDateMatch[1], 10);
+      const eMonth = parseInt(endDateMatch[2], 10) - 1;
+      const eDay = parseInt(endDateMatch[3], 10);
+      endDate = new Date(Date.UTC(eYear, eMonth, eDay, 23, 59, 59, 999));
+      if (isNaN(endDate.getTime()) || endDate.getUTCDate() !== eDay || endDate.getUTCMonth() !== eMonth) {
+        return 'INVALID';
+      }
+    } else {
+      return 'INVALID';
+    }
+
+    label = `${cleanedStart} to ${cleanedEnd}`;
+  } else {
+    // Single day
+    endDate = new Date(Date.UTC(sYear, sMonth, sDay, 23, 59, 59, 999));
+    label = cleanedStart;
+  }
+
+  if (startDate.getTime() > endDate.getTime()) {
+    return 'INVALID';
+  }
+
+  return { startDate, endDate, label };
+}
 
 export async function handleReportCommand(
   interaction: ChatInputCommandInteraction,
   sessionRepo: VoiceSessionRepository,
-  settingsRepo: GuildSettingsRepository
+  settingsRepo: GuildSettingsRepository,
+  ratesRepo?: ContractorRatesRepository,
+  timeRepo?: TimeAdjustmentsRepository
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
@@ -105,6 +227,8 @@ export async function handleReportCommand(
   const subcommand = interaction.options.getSubcommand();
   const format = (interaction.options.getString('format') as ExportFormat) || ExportFormat.EMBED;
   const preset = (interaction.options.getString('range') as TimeRangePreset) || TimeRangePreset.THIS_WEEK;
+  const customStartStr = interaction.options.getString('start_date');
+  const customEndStr = interaction.options.getString('end_date');
 
   const targetUser = subcommand === 'user' ? interaction.options.getUser('target') : undefined;
 
@@ -123,6 +247,29 @@ export async function handleReportCommand(
       ephemeral: true,
     });
     return;
+  }
+
+  let startDate: Date;
+  let endDate: Date;
+  let activePreset = preset;
+
+  if (customStartStr) {
+    const parsedRange = parseCustomDateRange(customStartStr, customEndStr);
+    if (!parsedRange || parsedRange === 'INVALID') {
+      await interaction.reply({
+        content:
+          '❌ Invalid date format. Please use `YYYY-MM-DD` (e.g. `2026-09-15`) or `YYYY-MM` (e.g. `2026-09`). Start date must also be before or equal to end date.',
+        ephemeral: true,
+      });
+      return;
+    }
+    startDate = parsedRange.startDate;
+    endDate = parsedRange.endDate;
+    activePreset = parsedRange.label as any;
+  } else {
+    const resolved = resolveTimeRange(preset);
+    startDate = resolved.startDate;
+    endDate = resolved.endDate;
   }
 
   await interaction.deferReply({ ephemeral: format === ExportFormat.EMBED ? false : true });
@@ -158,16 +305,47 @@ export async function handleReportCommand(
       }
     }
 
-    const { startDate, endDate } = resolveTimeRange(preset);
-
     const reportData = await sessionRepo.getAggregatedReport({
       guildId: guild.id,
       guildName: guild.name,
       userId: targetUser?.id,
       startDate,
       endDate,
-      preset,
+      preset: activePreset,
     });
+
+    // Apply manual adjustments if targeting an individual user
+    if (targetUser && timeRepo) {
+      const netAdjSeconds = await timeRepo.getNetAdjustmentSeconds(guild.id, targetUser.id, startDate, endDate);
+      const userAdjs = await timeRepo.getUserAdjustments(guild.id, targetUser.id, startDate, endDate);
+      if (userAdjs.length > 0) {
+        reportData.totalDurationSeconds = Math.max(0, reportData.totalDurationSeconds + netAdjSeconds);
+        reportData.totalDurationFormatted = formatDuration(reportData.totalDurationSeconds);
+        reportData.manualAdjustments = {
+          netSeconds: netAdjSeconds,
+          netFormatted: `${netAdjSeconds >= 0 ? '+' : ''}${formatDuration(Math.abs(netAdjSeconds))}`,
+          count: userAdjs.length,
+        };
+      }
+    }
+
+    // Attach contractor billing rate if authorized (Admin/Manager or inspecting self)
+    if (targetUser && ratesRepo && (isAdmin || targetUser.id === interaction.user.id)) {
+      const rate = await ratesRepo.getRate(guild.id, targetUser.id);
+      if (rate) {
+        const hourlyRateFormatted = `${(rate.hourlyRateCents / 100).toFixed(2)} ${rate.currency} / hr`;
+        const totalPayableCents = Math.round((reportData.totalDurationSeconds / 3600) * rate.hourlyRateCents);
+        const totalPayableFormatted = `${(totalPayableCents / 100).toFixed(2)} ${rate.currency}`;
+
+        reportData.contractorRate = {
+          hourlyRateCents: rate.hourlyRateCents,
+          hourlyRateFormatted,
+          currency: rate.currency,
+          totalPayableCents,
+          totalPayableFormatted,
+        };
+      }
+    }
 
     const exportResult = await exportReport(reportData, format);
 

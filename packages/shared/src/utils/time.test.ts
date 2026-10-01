@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDuration, formatDurationClock, resolveTimeRange } from './time';
+import { formatDuration, formatDurationClock, resolveTimeRange, renderProgressBar, getWeekStartDayIndex } from './time';
 import { TimeRangePreset } from '../enums/index';
 
 describe('Time Utilities', () => {
@@ -42,9 +42,21 @@ describe('Time Utilities', () => {
       expect(range.endDate.getTime()).toBeGreaterThan(range.startDate.getTime());
     });
 
-    it('should resolve THIS_WEEK starting on Monday UTC', () => {
+    it('should resolve THIS_WEEK starting on Monday UTC by default', () => {
       const range = resolveTimeRange(TimeRangePreset.THIS_WEEK);
       expect(range.startDate.getUTCDay()).toBe(1); // Monday
+      expect(range.startDate.getUTCHours()).toBe(0);
+    });
+
+    it('should resolve THIS_WEEK starting on Sunday UTC when configured', () => {
+      const range = resolveTimeRange(TimeRangePreset.THIS_WEEK, undefined, undefined, 'sunday');
+      expect(range.startDate.getUTCDay()).toBe(0); // Sunday
+      expect(range.startDate.getUTCHours()).toBe(0);
+    });
+
+    it('should resolve THIS_WEEK starting on Saturday UTC when configured', () => {
+      const range = resolveTimeRange(TimeRangePreset.THIS_WEEK, undefined, undefined, 'saturday');
+      expect(range.startDate.getUTCDay()).toBe(6); // Saturday
       expect(range.startDate.getUTCHours()).toBe(0);
     });
 
@@ -53,4 +65,39 @@ describe('Time Utilities', () => {
       expect(range.startDate.getTime()).toBe(0);
     });
   });
+
+  describe('getWeekStartDayIndex', () => {
+    it('should map day names to correct UTC day indices', () => {
+      expect(getWeekStartDayIndex('sunday')).toBe(0);
+      expect(getWeekStartDayIndex('monday')).toBe(1);
+      expect(getWeekStartDayIndex('tuesday')).toBe(2);
+      expect(getWeekStartDayIndex('wednesday')).toBe(3);
+      expect(getWeekStartDayIndex('thursday')).toBe(4);
+      expect(getWeekStartDayIndex('friday')).toBe(5);
+      expect(getWeekStartDayIndex('saturday')).toBe(6);
+    });
+  });
+
+  describe('renderProgressBar', () => {
+    it('should render 0% as empty blocks', () => {
+      expect(renderProgressBar(0, 10)).toBe('[░░░░░░░░░░] 0.0%');
+    });
+
+    it('should render 50% correctly', () => {
+      expect(renderProgressBar(50, 10)).toBe('[█████░░░░░] 50.0%');
+    });
+
+    it('should render 80% correctly', () => {
+      expect(renderProgressBar(80, 10)).toBe('[████████░░] 80.0%');
+    });
+
+    it('should render 100% full', () => {
+      expect(renderProgressBar(100, 10)).toBe('[██████████] 100.0%');
+    });
+
+    it('should cap display bar at 100% full while showing accurate percentage above 100%', () => {
+      expect(renderProgressBar(125.5, 10)).toBe('[██████████] 125.5%');
+    });
+  });
 });
+

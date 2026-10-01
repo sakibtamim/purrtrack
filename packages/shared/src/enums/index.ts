@@ -29,3 +29,13 @@ export enum VoiceTransitionType {
   SWITCH = 'SWITCH',
   STATE_CHANGE = 'STATE_CHANGE',
 }
+
+export enum WeekStartDay {
+  MONDAY = 'monday',
+  TUESDAY = 'tuesday',
+  WEDNESDAY = 'wednesday',
+  THURSDAY = 'thursday',
+  FRIDAY = 'friday',
+  SATURDAY = 'saturday',
+  SUNDAY = 'sunday',
+}

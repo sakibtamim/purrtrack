@@ -26,8 +26,16 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
         value: 'Admin tool to pull server-wide time tracking statistics, top voice channels, and team contributors.',
       },
       {
+        name: '🎯 `/goal view [target]` & `/goal set <hours>`',
+        value: 'Track your weekly voice commitment, visualize progress bars, and build daily active streaks.',
+      },
+      {
+        name: '🍅 `/focus start [work] [break] [task]`',
+        value: 'Run Pomodoro focus sprints while in voice channels with automated notifications and distraction-free tracking.',
+      },
+      {
         name: '⚙️ `/config view` & `/config set`',
-        value: 'Admin options to customize tracking rules, toggle AFK channel exclusions, or specify announcement channels.',
+        value: 'Admin options to customize tracking rules, toggle AFK channel exclusions, manage ignored channels, or adjust media tracking.',
       }
     )
     .setFooter({ text: 'PurrTrack • Enterprise Voice Time Tracking' })

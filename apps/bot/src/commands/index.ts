@@ -3,12 +3,15 @@ import {
   AutocompleteInteraction,
   RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
-import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
+import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
+import { FocusManager } from '../engine/focus-manager.js';
 import { statusCommand, handleStatusCommand } from './status.js';
 import { reportCommand, handleReportCommand } from './report.js';
 import { configCommand, handleConfigCommand, handleConfigAutocomplete } from './config.js';
 import { helpCommand, handleHelpCommand } from './help.js';
 import { pingCommand, handlePingCommand } from './ping.js';
+import { goalCommand, handleGoalCommand } from './goal.js';
+import { focusCommand, handleFocusCommand } from './focus.js';
 import { logger } from '../core/logger.js';
 
 export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
@@ -16,13 +19,17 @@ export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = 
   statusCommand.toJSON(),
   reportCommand.toJSON(),
   configCommand.toJSON(),
+  goalCommand.toJSON(),
+  focusCommand.toJSON(),
   helpCommand.toJSON(),
 ];
 
 export async function dispatchSlashCommand(
   interaction: ChatInputCommandInteraction,
   sessionRepo: VoiceSessionRepository,
-  settingsRepo: GuildSettingsRepository
+  settingsRepo: GuildSettingsRepository,
+  goalsRepo: UserGoalsRepository,
+  focusManager: FocusManager
 ): Promise<void> {
   const { commandName, user } = interaction;
   logger.info(`⚡ [commands] /${commandName} invoked by @${user.username} (${user.id}) in guild ${interaction.guildId}`);
@@ -43,6 +50,14 @@ export async function dispatchSlashCommand(
 
       case 'config':
         await handleConfigCommand(interaction, settingsRepo);
+        break;
+
+      case 'goal':
+        await handleGoalCommand(interaction, sessionRepo, goalsRepo);
+        break;
+
+      case 'focus':
+        await handleFocusCommand(interaction, focusManager);
         break;
 
       case 'help':

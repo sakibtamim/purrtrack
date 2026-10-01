@@ -1,9 +1,10 @@
 import { Client, GatewayIntentBits } from 'discord.js';
-import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
+import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
 import { env, getEnv } from './config/env.js';
 import { logger } from './core/logger.js';
 import { registerGracefulExit } from './core/graceful-exit.js';
 import { VoiceTracker } from './engine/voice-tracker.js';
+import { FocusManager } from './engine/focus-manager.js';
 import { StartupReconciler } from './engine/reconciler.js';
 import { registerReady } from './events/ready.js';
 import { registerVoiceStateUpdate } from './events/voice-state-update.js';
@@ -20,12 +21,14 @@ async function bootstrap(): Promise<void> {
     process.exit(1);
   }
 
-  // 2. Initialize Repositories
+  // 2. Initialize Repositories & Managers
   const sessionRepo = new VoiceSessionRepository();
   const settingsRepo = new GuildSettingsRepository();
+  const goalsRepo = new UserGoalsRepository();
+  const focusManager = new FocusManager(sessionRepo);
 
   // 3. Initialize Tracking Engine & Reconciler
-  const voiceTracker = new VoiceTracker(sessionRepo, settingsRepo, 5); // 5s anti-flap debounce
+  const voiceTracker = new VoiceTracker(sessionRepo, settingsRepo, 5, goalsRepo); // 5s anti-flap debounce
   const reconciler = new StartupReconciler(sessionRepo);
 
   // 4. Create Discord Client with exact required voice intents (unprivileged)
@@ -44,7 +47,7 @@ async function bootstrap(): Promise<void> {
   // 6. Register Gateway Events
   registerReady(client, reconciler);
   registerVoiceStateUpdate(client, voiceTracker);
-  registerInteractionCreate(client, sessionRepo, settingsRepo);
+  registerInteractionCreate(client, sessionRepo, settingsRepo, goalsRepo, focusManager);
 
   // 7. Login to Discord
   logger.info('🔐 Connecting to Discord Gateway...');

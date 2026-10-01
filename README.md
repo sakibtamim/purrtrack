@@ -24,6 +24,8 @@
 
 - [Overview & Architecture](#-overview--architecture)
 - [100% Success Invariants](#-100-success-invariants)
+- [Productivity Suite (Goals & Focus Sprints)](#-productivity-suite-goals--focus-sprints)
+- [Screen Share & Webcam Media Tracking](#-screen-share--webcam-media-tracking)
 - [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Multi-Format Reporting Engine](#-multi-format-reporting-engine)
 - [Monorepo Workspace Structure](#-monorepo-workspace-structure)
@@ -50,14 +52,15 @@ graph TD
 
     subgraph BOT ["apps/bot (Discord Bot Service)"]
         CLIENT["Discord Client (discord.js v14)"]
-        TRACKER["Voice Tracking Engine<br/>• 5s Anti-Flap Debounce<br/>• Session State Machine<br/>• Channel Segment Splitter"]
+        TRACKER["Voice Tracking Engine<br/>• 5s Anti-Flap Debounce<br/>• Session State Machine<br/>• Channel & Media Segment Slicing"]
+        FOCUS["Pomodoro Focus Engine<br/>• Work/Break Timers<br/>• Automated Channel & DM Notifications"]
         RECONCILER["Startup Reconciler<br/>• Voice Channel Scanner<br/>• Ghost Session Healer"]
-        COMMANDS["Slash Command Router (/ping, /status, /report, /config, /help)"]
+        COMMANDS["Slash Command Router<br/>• /ping, /status, /report, /config<br/>• /goal, /focus, /help"]
         EXPORTER["Universal Multi-Format Exporter<br/>• Excel (.xlsx)<br/>• PDF Timesheets<br/>• CSV (UTF-8 BOM)<br/>• JSON & Discord Embeds"]
     end
 
     subgraph DB ["packages/db (PostgreSQL Persistence)"]
-        REPOS["Repository Layer (VoiceSessionRepository, GuildSettingsRepository)"]
+        REPOS["Repository Layer<br/>• VoiceSessionRepository<br/>• GuildSettingsRepository<br/>• UserGoalsRepository"]
         DRIZZLE["Drizzle ORM Engine"]
         PG[("PostgreSQL 16 Database<br/>Partial Unique Index Guard")]
     end
@@ -72,8 +75,11 @@ graph TD
     INTERACTION --> COMMANDS
     CLIENT --> RECONCILER
     TRACKER --> REPOS
+    TRACKER --> FOCUS
+    COMMANDS --> FOCUS
     RECONCILER --> REPOS
     COMMANDS --> EXPORTER
+    COMMANDS --> REPOS
     EXPORTER --> REPOS
     REPOS --> DRIZZLE
     DRIZZLE --> PG
@@ -107,6 +113,41 @@ PurrTrack incorporates battle-tested resilience patterns from enterprise Discord
 
 ---
 
+## 🎯 Productivity Suite (Goals & Focus Sprints)
+
+PurrTrack includes an integrated productivity and habit-building system directly within voice channels:
+
+### 1. Weekly Voice Goals & Streaks (`/goal`)
+* **`/goal set [target_hours:<1-168>] [week_start:<day>]`**: Configure your personal weekly voice time commitment and choose your preferred cycle start day (e.g. Monday for ISO standard, Sunday for US/CA/JP, Saturday for Middle East/Bangladesh/Islamic calendar).
+* **`/goal view [target: Member]`**: Displays weekly progress towards your goal:
+  * Dynamic visual ASCII progress bar: `[████████░░] 80.0% (16h 00m / 20h 00m)`.
+  * Week countdown timeline: Tracks remaining hours and days until your custom week start day 00:00 UTC reset.
+  * Active daily streak counter: Tracks consecutive calendar days with active voice activity (`🔥 5 consecutive days`).
+  * In-database historical streak backfilling ensures existing active members maintain their current streaks automatically.
+
+### 2. Pomodoro Focus Sprints (`/focus`)
+* **`/focus start [work: 25] [break: 5] [task: "Refactoring API"]`**:
+  * Engages distraction-free focus tracking while in a voice channel.
+  * Slices active voice segments with `isFocus: true` and attaches the custom focus task description.
+  * Automated completion alerts:
+    * Work sprint completes: Sends an in-channel or DM notification reminding the user to take their break (`☕`).
+    * Break completes: Sends an alert prompting the member to initiate their next focus sprint (`🚀`).
+* **`/focus stop`**: Cancels active focus timers early, reverts segment focus status, and logs total focused time.
+* **`/focus status`**: Inspects current phase (work sprint vs break), elapsed duration, and time remaining.
+
+---
+
+## 📹 Screen Share & Webcam Media Tracking
+
+PurrTrack tracks when members are actively presenting or collaborating visually:
+
+* **Real-Time State Slicing**: When a user turns on their camera (`selfVideo`) or starts sharing their screen (`streaming`), PurrTrack automatically slices the session segment in-place without ending the parent session. This guarantees down-to-the-second accuracy for screen sharing and webcam time.
+* **Live Status Grid**: `/status` renders a clean, balanced 2-column embed with native Discord relative timestamps, presenting `🎙️ Voice & Audio` (Mic & Deafen) and `📺 Media & Video` (Screen Share & Camera) side-by-side.
+* **Configurable Policies**: Admins can toggle `track_streaming` and `track_camera` via `/config set`.
+* **Ignored Channels**: Channels can be excluded from tracking entirely via `/config channel_ignore` and restored via `/config channel_unignore` with interactive autocomplete.
+
+---
+
 ## 🔒 Role-Based Access Control (RBAC)
 
 PurrTrack enforces strict enterprise permission boundaries:
@@ -127,11 +168,14 @@ Server Admins can designate any role as a **Management Role** (e.g. `@Engineerin
 | :--- | :---: | :---: | :---: |
 | **`/status` (Self)** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/status target:@other_user`** | ⛔ **Blocked** *(Self-only)* | ✅ Allowed | ✅ Allowed |
+| **`/goal view` (Self / Other)** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/goal set` (Personal Target)** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **`/focus start / stop / status`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/report user target:@self`** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **`/report user target:@other_user`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
 | **`/report guild` (Server Timesheet)** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
 | **`/config view`** | ⛔ **Blocked** | ✅ Allowed | ✅ Allowed |
-| **`/config set` / `role_add`** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
+| **`/config set` / `role_add` / `channel_ignore`** | ⛔ **Blocked** | ⛔ **Blocked** | ✅ Allowed |
 
 ---
 
@@ -155,8 +199,8 @@ Admins and team leads can pull timesheets across any timeframe (**Today**, **Yes
 purrtrack/
 ├── apps/
 │   ├── bot/                          # Discord Bot Service
-│   │   ├── src/commands/             # /ping, /status, /report, /config, /help
-│   │   ├── src/engine/               # Voice Tracker (5s anti-flap) & Startup Reconciler
+│   │   ├── src/commands/             # /ping, /status, /report, /config, /goal, /focus, /help
+│   │   ├── src/engine/               # Voice Tracker, Pomodoro Focus Manager & Startup Reconciler
 │   │   ├── src/exporters/            # CSV, Excel, PDF, JSON, Discord Embed generators
 │   │   ├── src/core/                 # Graceful exit watchdog, structured logger, announcer
 │   │   ├── src/events/               # ready, voiceStateUpdate, interactionCreate
@@ -170,8 +214,8 @@ purrtrack/
 │   │   └── src/                      # Session schemas, report schemas, duration formatters
 │   │
 │   └── db/                           # Drizzle ORM PostgreSQL Persistence
-│       ├── src/schema/               # voice_sessions, session_segments, guild_settings, etc.
-│       ├── src/repositories/         # VoiceSessionRepository & GuildSettingsRepository
+│       ├── src/schema/               # voice_sessions, session_segments, guild_settings, user_goals
+│       ├── src/repositories/         # VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository
 │       └── drizzle/                  # Auto-generated SQL migrations
 │
 ├── docker-compose.yml                # Dedicated PostgreSQL 16 container (port 5438)
@@ -261,13 +305,20 @@ pnpm dev
 | Command | Subcommand | Arguments | Permission | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `/ping` | — | — | Public | Checks Discord Gateway WebSocket ping, API latency, and responsiveness. |
-| `/status` | — | `[target: Member]` | Self (Public) / Target (Manager) | Displays real-time live elapsed duration for current voice session and channel. Regular members can only view their own status. |
+| `/status` | — | `[target: Member]` | Self (Public) / Target (Manager) | Displays real-time live elapsed duration for current voice session, active channel, voice status, and media state (screen share & camera) in a balanced 2-column layout. |
+| `/goal` | `view` | `[target: Member]` | Public | View current weekly goal progress, visual ASCII progress bar (`[████████░░]`), countdown to reset, and active daily streak. |
+| `/goal` | `set` | `[target_hours: Number]`, `[week_start: Day]` | Self | Set your personal weekly voice target (1h – 168h) and preferred week start day (Monday, Sunday, Saturday, etc.). |
+| `/focus` | `start` | `[work: Number]`, `[break: Number]`, `[task: String]` | Public (Connected in Voice) | Starts a Pomodoro focus sprint with automated completion alerts and distraction-free tracking. |
+| `/focus` | `stop` | — | Public | Ends active focus session early and reports completed focus time. |
+| `/focus` | `status` | — | Public | Checks remaining sprint time and active phase (work sprint vs break). |
 | `/report` | `user` | `target: Member`, `[format: Format]`, `[range: Range]` | Self (Public) / Target (Manager) | Generates an individual timesheet in Excel, PDF, CSV, JSON, or Embed. Regular members can only view their own report. |
 | `/report` | `guild` | `[format: Format]`, `[range: Range]` | Admin / Manager | Generates an aggregated timesheet and leaderboard across all voice channels for the entire server. |
-| `/config` | `view` | — | Admin / Manager | Inspects current server tracking settings and designated management roles. |
+| `/config` | `view` | — | Admin / Manager | Inspects current server tracking settings, ignored channels, and designated management roles. |
 | `/config` | `role_add` | `role: Role` | Admin / Owner | Grants Management permissions to a role (allows inspecting other users and pulling server-wide reports). |
 | `/config` | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
-| `/config` | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[announce_channel]` | Admin / Owner | Updates voice tracking policies and announcement preferences. |
+| `/config` | `channel_ignore` | `channel: Channel` | Admin / Owner | Adds a voice channel to the ignore list (bypasses tracking). |
+| `/config` | `channel_unignore` | `channel: Channel` | Admin / Owner | Removes a voice channel from the ignore list with dynamic autocomplete. |
+| `/config` | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[track_streaming]`, `[track_camera]`, `[announce_channel]` | Admin / Owner | Updates voice tracking policies and announcement preferences. |
 | `/help` | — | — | Public | Displays interactive command guide and feature documentation. |
 
 ---
@@ -292,7 +343,7 @@ pnpm dev
 PurrTrack adheres to strict engineering standards. All pull requests and commits are verified against automated unit and integration tests:
 
 ```bash
-# Run complete test suite (24 unit & database integration tests)
+# Run complete test suite (38 unit & database integration tests across 5 suites)
 pnpm test
 
 # Run TypeScript compiler checks across all workspace packages

@@ -563,4 +563,102 @@ export class VoiceSessionRepository {
       sessions: sessionItems,
     };
   }
+
+  /**
+   * Calculate lifetime voice metrics and special hours for gamification
+   */
+  async getUserLifetimeStats(guildId: string, userId: string): Promise<UserLifetimeStats> {
+    const sessions = await this.database
+      .select({
+        id: voiceSessions.id,
+        durationSeconds: voiceSessions.durationSeconds,
+        startedAt: voiceSessions.startedAt,
+        status: voiceSessions.status,
+      })
+      .from(voiceSessions)
+      .where(and(eq(voiceSessions.guildId, guildId), eq(voiceSessions.userId, userId)));
+
+    const now = new Date();
+    let totalDurationSeconds = 0;
+    let nightHoursSeconds = 0;
+    let morningHoursSeconds = 0;
+    let weekendHoursSeconds = 0;
+
+    for (const s of sessions) {
+      const isLive = s.status === 'ACTIVE' || s.durationSeconds === null;
+      const dur = isLive
+        ? Math.max(0, Math.floor((now.getTime() - new Date(s.startedAt).getTime()) / 1000))
+        : (s.durationSeconds || 0);
+
+      totalDurationSeconds += dur;
+
+      const date = new Date(s.startedAt);
+      const hour = date.getUTCHours();
+      const day = date.getUTCDay();
+
+      if (hour >= 0 && hour < 5) {
+        nightHoursSeconds += dur;
+      } else if (hour >= 5 && hour < 8) {
+        morningHoursSeconds += dur;
+      }
+
+      if (day === 0 || day === 6) {
+        weekendHoursSeconds += dur;
+      }
+    }
+
+    const segments = await this.database
+      .select({
+        durationSeconds: sessionSegments.durationSeconds,
+        startedAt: sessionSegments.startedAt,
+        endedAt: sessionSegments.endedAt,
+        wasStreaming: sessionSegments.wasStreaming,
+        wasVideo: sessionSegments.wasVideo,
+        isFocus: sessionSegments.isFocus,
+      })
+      .from(sessionSegments)
+      .innerJoin(voiceSessions, eq(sessionSegments.sessionId, voiceSessions.id))
+      .where(and(eq(voiceSessions.guildId, guildId), eq(voiceSessions.userId, userId)));
+
+    let totalStreamingSeconds = 0;
+    let totalVideoSeconds = 0;
+    let totalMediaSeconds = 0;
+    let totalFocusSeconds = 0;
+
+    for (const seg of segments) {
+      const isLive = seg.endedAt === null || seg.durationSeconds === null;
+      const dur = isLive
+        ? Math.max(0, Math.floor((now.getTime() - new Date(seg.startedAt).getTime()) / 1000))
+        : (seg.durationSeconds || 0);
+
+      if (seg.wasStreaming) totalStreamingSeconds += dur;
+      if (seg.wasVideo) totalVideoSeconds += dur;
+      if (seg.wasStreaming || seg.wasVideo) totalMediaSeconds += dur;
+      if (seg.isFocus) totalFocusSeconds += dur;
+    }
+
+    return {
+      totalDurationSeconds,
+      totalSessionsCount: sessions.length,
+      totalStreamingSeconds,
+      totalVideoSeconds,
+      totalMediaSeconds,
+      totalFocusSeconds,
+      nightHoursSeconds,
+      morningHoursSeconds,
+      weekendHoursSeconds,
+    };
+  }
+}
+
+export interface UserLifetimeStats {
+  totalDurationSeconds: number;
+  totalSessionsCount: number;
+  totalStreamingSeconds: number;
+  totalVideoSeconds: number;
+  totalMediaSeconds: number;
+  totalFocusSeconds: number;
+  nightHoursSeconds: number;
+  morningHoursSeconds: number;
+  weekendHoursSeconds: number;
 }

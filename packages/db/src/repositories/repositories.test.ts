@@ -231,6 +231,82 @@ describe('PostgreSQL Repositories Integration Suite', () => {
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const nextDay = await goalsRepo.recordActivityAndStreak(testGuildId, userGoalTest, tomorrow);
     expect(nextDay.currentStreakDays).toBe(withActivity.currentStreakDays + 1);
+
+    // Equip and unequip showcase badges
+    const equipped = await goalsRepo.equipBadge(testGuildId, userGoalTest, 'streak_7', 1);
+    expect(equipped.equippedBadgeIds[0]).toBe('streak_7');
+
+    const equipped2 = await goalsRepo.equipBadge(testGuildId, userGoalTest, 'goal_crusher_1', 2);
+    expect(equipped2.equippedBadgeIds[1]).toBe('goal_crusher_1');
+
+    const unequipped = await goalsRepo.unequipBadge(testGuildId, userGoalTest, 2);
+    expect(unequipped.equippedBadgeIds[1]).toBe('');
+
+    // Counter increments
+    const withGoalsInc = await goalsRepo.incrementCompletedGoals(testGuildId, userGoalTest);
+    expect(withGoalsInc.completedGoalsCount).toBe(1);
+
+    const withFocusInc = await goalsRepo.incrementCompletedFocusSprints(testGuildId, userGoalTest);
+    expect(withFocusInc.completedFocusSprints).toBe(1);
+  });
+
+  it('UserBadges: unlocks and retrieves user badges idempotently', async () => {
+    const { UserBadgesRepository } = await import('./user-badges-repository.js');
+    const badgesRepo = new UserBadgesRepository();
+    const testUser = `badge_user_${Date.now()}`;
+
+    // Initially has no badges
+    const initialBadges = await badgesRepo.getUserBadges(testGuildId, testUser);
+    expect(initialBadges.length).toBe(0);
+    expect(await badgesRepo.hasBadge(testGuildId, testUser, 'streak_7')).toBe(false);
+
+    // Unlock a badge
+    const unlocked = await badgesRepo.unlockBadge(testGuildId, testUser, 'streak_7');
+    expect(unlocked).toBeDefined();
+    expect(unlocked?.badgeId).toBe('streak_7');
+    expect(await badgesRepo.hasBadge(testGuildId, testUser, 'streak_7')).toBe(true);
+
+    // Unlocking same badge again returns null (idempotent)
+    const duplicate = await badgesRepo.unlockBadge(testGuildId, testUser, 'streak_7');
+    expect(duplicate).toBeNull();
+
+    // Batch unlock
+    const batch = await badgesRepo.unlockBadges(testGuildId, testUser, ['streak_7', 'goal_crusher_1', 'voice_100h']);
+    expect(batch).toEqual(['goal_crusher_1', 'voice_100h']); // streak_7 was already unlocked
+
+    const allBadges = await badgesRepo.getUserBadges(testGuildId, testUser);
+    expect(allBadges.length).toBe(3);
+  });
+
+
+  it('VoiceSessionRepository: getUserLifetimeStats computes live streaming and total media time for active sessions', async () => {
+    const liveUser = `live_stream_user_${Date.now()}`;
+    await sessionRepo.upsertUser(liveUser, 'live_stream', 'Live Stream');
+    await sessionRepo.upsertChannel(testChannel1, testGuildId, 'Live Stream Channel');
+
+    // Start active session 10 seconds ago
+    const startedAt = new Date(Date.now() - 10000);
+    const { session } = await sessionRepo.startSession({
+      guildId: testGuildId,
+      userId: liveUser,
+      channelId: testChannel1,
+      channelName: 'Live Stream Channel',
+      startedAt,
+      wasStreaming: true,
+      wasVideo: false,
+    });
+
+    const stats = await sessionRepo.getUserLifetimeStats(testGuildId, liveUser);
+    expect(stats.totalDurationSeconds).toBeGreaterThanOrEqual(10);
+    expect(stats.totalStreamingSeconds).toBeGreaterThanOrEqual(10);
+    expect(stats.totalMediaSeconds).toBeGreaterThanOrEqual(10);
+    expect(stats.totalVideoSeconds).toBe(0);
+
+    // End session
+    await sessionRepo.endSession({
+      sessionId: session.id,
+      endedAt: new Date(),
+    });
   });
 });
 

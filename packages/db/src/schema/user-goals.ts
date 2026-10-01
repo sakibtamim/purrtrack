@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, integer, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, integer, boolean, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const userGoals = pgTable(
   'user_goals',
@@ -12,6 +12,9 @@ export const userGoals = pgTable(
     lastActiveDate: varchar('last_active_date', { length: 10 }), // 'YYYY-MM-DD'
     hasActiveGoal: boolean('has_active_goal').notNull().default(false),
     cycleStartDate: timestamp('cycle_start_date', { withTimezone: true }),
+    equippedBadgeIds: jsonb('equipped_badge_ids').$type<string[]>().notNull().default([]),
+    completedGoalsCount: integer('completed_goals_count').notNull().default(0),
+    completedFocusSprints: integer('completed_focus_sprints').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

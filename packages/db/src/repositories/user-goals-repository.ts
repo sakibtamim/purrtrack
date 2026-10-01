@@ -127,6 +127,99 @@ export class UserGoalsRepository {
   }
 
   /**
+   * Equip a badge into a specific showcase slot (1, 2, or 3)
+   */
+  async equipBadge(
+    guildId: string,
+    userId: string,
+    badgeId: string,
+    slot: number = 1
+  ): Promise<UserGoalRow> {
+    const goal = await this.getOrCreateGoal(guildId, userId);
+    const slots = [...(goal.equippedBadgeIds || [])];
+
+    while (slots.length < 3) {
+      slots.push('');
+    }
+
+    const slotIndex = Math.max(0, Math.min(2, Math.round(slot) - 1));
+    for (let i = 0; i < slots.length; i++) {
+      if (slots[i] === badgeId) {
+        slots[i] = '';
+      }
+    }
+    slots[slotIndex] = badgeId;
+
+    const [updated] = await this.database
+      .update(userGoals)
+      .set({
+        equippedBadgeIds: slots.slice(0, 3),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(userGoals.guildId, guildId), eq(userGoals.userId, userId)))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * Unequip a badge from a specific showcase slot (1, 2, or 3)
+   */
+  async unequipBadge(guildId: string, userId: string, slot: number): Promise<UserGoalRow> {
+    const goal = await this.getOrCreateGoal(guildId, userId);
+    const slots = [...(goal.equippedBadgeIds || [])];
+    const slotIndex = Math.max(0, Math.min(2, Math.round(slot) - 1));
+    if (slotIndex < slots.length) {
+      slots[slotIndex] = '';
+    }
+
+    const [updated] = await this.database
+      .update(userGoals)
+      .set({
+        equippedBadgeIds: slots.slice(0, 3),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(userGoals.guildId, guildId), eq(userGoals.userId, userId)))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * Increment count of completed weekly goals
+   */
+  async incrementCompletedGoals(guildId: string, userId: string): Promise<UserGoalRow> {
+    await this.getOrCreateGoal(guildId, userId);
+    const [updated] = await this.database
+      .update(userGoals)
+      .set({
+        completedGoalsCount: sql`${userGoals.completedGoalsCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(userGoals.guildId, guildId), eq(userGoals.userId, userId)))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * Increment count of completed focus sprints
+   */
+  async incrementCompletedFocusSprints(guildId: string, userId: string): Promise<UserGoalRow> {
+    await this.getOrCreateGoal(guildId, userId);
+    const [updated] = await this.database
+      .update(userGoals)
+      .set({
+        completedFocusSprints: sql`${userGoals.completedFocusSprints} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(userGoals.guildId, guildId), eq(userGoals.userId, userId)))
+      .returning();
+
+    return updated;
+  }
+
+  /**
    * Record activity and update daily streak
    */
   async recordActivityAndStreak(
@@ -215,5 +308,17 @@ export class UserGoalsRepository {
     }
 
     return streak;
+  }
+
+  /**
+   * Fetch top streaks for a guild ordered descending
+   */
+  async getTopStreaks(guildId: string, limit: number = 50): Promise<UserGoalRow[]> {
+    return this.database
+      .select()
+      .from(userGoals)
+      .where(and(eq(userGoals.guildId, guildId), sql`${userGoals.currentStreakDays} > 0`))
+      .orderBy(sql`${userGoals.currentStreakDays} DESC`)
+      .limit(limit);
   }
 }

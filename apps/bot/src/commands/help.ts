@@ -34,8 +34,16 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
         value: 'Run Pomodoro focus sprints while in voice channels (default: 25m work, 5m break) with automated notifications and distraction-free tracking.',
       },
       {
-        name: '⚙️ `/config view` & `/config set`',
-        value: 'Admin options to customize tracking rules, toggle AFK channel exclusions, manage ignored channels, or adjust media tracking.',
+        name: '👤 `/profile view` • `/profile badges` • `/profile equip` • `/profile unequip`',
+        value: 'View your profile card, inspect 26 achievement badges across 6 categories, and equip a 3-badge showcase (Slot 1 Title, Slots 2-3 Trophy Rack).',
+      },
+      {
+        name: '🏆 `/leaderboard [period] [metric] [page]`',
+        value: 'Interactive server leaderboard with Top 3 podiums (🥇🥈🥉), equipped titles, and button navigation (◀️ Prev, Next ▶️, 🎯 My Rank).',
+      },
+      {
+        name: '⚙️ `/config` (Server Admins)',
+        value: 'Configure tracking rules, toggle AFK/media settings, designate management roles, or manage ignored channels.',
       }
     )
     .setFooter({ text: 'PurrTrack • Enterprise Voice Time Tracking' })

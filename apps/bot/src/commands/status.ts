@@ -4,8 +4,8 @@ import {
   EmbedBuilder,
   PermissionFlagsBits,
 } from 'discord.js';
-import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
-import { formatDuration } from '@purrtrack/shared';
+import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
+import { formatDuration, renderBadgePill } from '@purrtrack/shared';
 
 export const statusCommand = new SlashCommandBuilder()
   .setName('status')
@@ -20,7 +20,8 @@ export const statusCommand = new SlashCommandBuilder()
 export async function handleStatusCommand(
   interaction: ChatInputCommandInteraction,
   sessionRepo: VoiceSessionRepository,
-  settingsRepo?: GuildSettingsRepository
+  settingsRepo?: GuildSettingsRepository,
+  goalsRepo?: UserGoalsRepository
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
@@ -133,10 +134,15 @@ export async function handleStatusCommand(
   const userAvatar = targetUser.displayAvatarURL ? targetUser.displayAvatarURL({ size: 128 }) : undefined;
   const userTag = targetUser.displayName ? `${targetUser.displayName} (@${targetUser.username})` : `@${targetUser.username}`;
 
+  const userGoal = goalsRepo ? await goalsRepo.getGoal(guild.id, targetUser.id) : null;
+  const primaryBadgeId = userGoal?.equippedBadgeIds?.[0];
+  const badgePill = primaryBadgeId ? renderBadgePill(primaryBadgeId) : '';
+  const authorName = badgePill ? `${userTag} • ${badgePill}` : userTag;
+
   const embed = new EmbedBuilder()
     .setColor(0x57f287) // Discord Green
     .setAuthor({
-      name: userTag,
+      name: authorName,
       iconURL: userAvatar,
     })
     .setTitle(`🟢 Active Voice Tracking`)

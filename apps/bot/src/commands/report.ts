@@ -7,6 +7,11 @@ import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
 import { ExportFormat, TimeRangePreset, resolveTimeRange } from '@purrtrack/shared';
 import { exportReport } from '../exporters/index.js';
 
+const now = new Date();
+const currentMonthLabel = now.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+const lastMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+const lastMonthLabel = lastMonthDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+
 export const reportCommand = new SlashCommandBuilder()
   .setName('report')
   .setDescription('📊 Pull voice time tracking reports in any format (CSV, Excel, PDF, JSON, Embed)')
@@ -38,8 +43,8 @@ export const reportCommand = new SlashCommandBuilder()
             { name: 'Yesterday', value: TimeRangePreset.YESTERDAY },
             { name: 'This Week (Monday - Now)', value: TimeRangePreset.THIS_WEEK },
             { name: 'Last Week', value: TimeRangePreset.LAST_WEEK },
-            { name: 'This Month', value: TimeRangePreset.THIS_MONTH },
-            { name: 'Last Month', value: TimeRangePreset.LAST_MONTH },
+            { name: `${currentMonthLabel} (This Month)`, value: TimeRangePreset.THIS_MONTH },
+            { name: `${lastMonthLabel} (Last Month)`, value: TimeRangePreset.LAST_MONTH },
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
       )
@@ -71,8 +76,8 @@ export const reportCommand = new SlashCommandBuilder()
             { name: 'Yesterday', value: TimeRangePreset.YESTERDAY },
             { name: 'This Week', value: TimeRangePreset.THIS_WEEK },
             { name: 'Last Week', value: TimeRangePreset.LAST_WEEK },
-            { name: 'This Month', value: TimeRangePreset.THIS_MONTH },
-            { name: 'Last Month', value: TimeRangePreset.LAST_MONTH },
+            { name: `${currentMonthLabel} (This Month)`, value: TimeRangePreset.THIS_MONTH },
+            { name: `${lastMonthLabel} (Last Month)`, value: TimeRangePreset.LAST_MONTH },
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
       )

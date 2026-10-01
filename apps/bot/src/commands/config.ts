@@ -281,6 +281,7 @@ export async function handleConfigCommand(
       content: `✅ Successfully updated PurrTrack settings for **${guild.name}**!`,
       ephemeral: true,
     });
+    return;
   }
 }
 

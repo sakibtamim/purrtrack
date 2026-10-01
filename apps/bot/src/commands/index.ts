@@ -1,9 +1,15 @@
 import {
   ChatInputCommandInteraction,
   AutocompleteInteraction,
+  ButtonInteraction,
   RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
-import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
+import {
+  VoiceSessionRepository,
+  GuildSettingsRepository,
+  UserGoalsRepository,
+  UserBadgesRepository,
+} from '@purrtrack/db';
 import { FocusManager } from '../engine/focus-manager.js';
 import { statusCommand, handleStatusCommand } from './status.js';
 import { reportCommand, handleReportCommand } from './report.js';
@@ -12,6 +18,8 @@ import { helpCommand, handleHelpCommand } from './help.js';
 import { pingCommand, handlePingCommand } from './ping.js';
 import { goalCommand, handleGoalCommand } from './goal.js';
 import { focusCommand, handleFocusCommand } from './focus.js';
+import { profileCommand, handleProfileCommand, handleProfileAutocomplete } from './profile.js';
+import { leaderboardCommand, handleLeaderboardCommand, handleLeaderboardButton } from './leaderboard.js';
 import { logger } from '../core/logger.js';
 
 export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
@@ -21,6 +29,8 @@ export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = 
   configCommand.toJSON(),
   goalCommand.toJSON(),
   focusCommand.toJSON(),
+  profileCommand.toJSON(),
+  leaderboardCommand.toJSON(),
   helpCommand.toJSON(),
 ];
 
@@ -29,7 +39,9 @@ export async function dispatchSlashCommand(
   sessionRepo: VoiceSessionRepository,
   settingsRepo: GuildSettingsRepository,
   goalsRepo: UserGoalsRepository,
-  focusManager: FocusManager
+  focusManager: FocusManager,
+  badgesRepo: UserBadgesRepository,
+  badgeManager?: any
 ): Promise<void> {
   const { commandName, user } = interaction;
   logger.info(`⚡ [commands] /${commandName} invoked by @${user.username} (${user.id}) in guild ${interaction.guildId}`);
@@ -41,7 +53,7 @@ export async function dispatchSlashCommand(
         break;
 
       case 'status':
-        await handleStatusCommand(interaction, sessionRepo, settingsRepo);
+        await handleStatusCommand(interaction, sessionRepo, settingsRepo, goalsRepo);
         break;
 
       case 'report':
@@ -58,6 +70,14 @@ export async function dispatchSlashCommand(
 
       case 'focus':
         await handleFocusCommand(interaction, focusManager);
+        break;
+
+      case 'profile':
+        await handleProfileCommand(interaction, sessionRepo, goalsRepo, badgesRepo, badgeManager);
+        break;
+
+      case 'leaderboard':
+        await handleLeaderboardCommand(interaction, sessionRepo, goalsRepo, badgeManager);
         break;
 
       case 'help':
@@ -82,14 +102,19 @@ export async function dispatchSlashCommand(
 
 export async function dispatchAutocomplete(
   interaction: AutocompleteInteraction,
-  settingsRepo: GuildSettingsRepository
+  settingsRepo: GuildSettingsRepository,
+  badgesRepo: UserBadgesRepository
 ): Promise<void> {
   const { commandName } = interaction;
   try {
     if (commandName === 'config') {
       await handleConfigAutocomplete(interaction, settingsRepo);
+    } else if (commandName === 'profile') {
+      await handleProfileAutocomplete(interaction, badgesRepo);
     }
   } catch (error) {
-    logger.error(`[autocomplete] Error executing autocomplete for /\${commandName}:`, error);
+    logger.error(`[autocomplete] Error executing autocomplete for /${commandName}:`, error);
   }
 }
+
+export { handleLeaderboardButton };

@@ -25,6 +25,7 @@
 - [Overview & Architecture](#-overview--architecture)
 - [100% Success Invariants](#-100-success-invariants)
 - [Productivity Suite (Goals & Focus Sprints)](#-productivity-suite-goals--focus-sprints)
+- [Gamification, Badges & Community Leaderboard](#-gamification-badges--community-leaderboard)
 - [Screen Share & Webcam Media Tracking](#-screen-share--webcam-media-tracking)
 - [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Multi-Format Reporting Engine](#-multi-format-reporting-engine)
@@ -142,6 +143,47 @@ PurrTrack includes an integrated productivity and habit-building system directly
 
 ---
 
+## 🏆 Gamification, Badges & Community Leaderboard
+
+PurrTrack features a comprehensive achievement and community engagement engine designed to encourage voice participation, productivity, and healthy competition:
+
+### 1. Achievement Badges (26 Badges across 6 Categories)
+Badges start locked (`🔒`) and unlock dynamically in real-time as users hit voice milestones, complete weekly goals, run focus sprints, or stream:
+* **🎯 Goals**: `goal_first` (First Goal Crushed), `goal_5` (Consistent Achiever), `goal_10` (Goal Master), `goal_25` (Unstoppable).
+* **🔥 Streaks**: `streak_3` (3-Day Streak), `streak_7` (Week of Fire), `streak_14` (Fortnight Flame), `streak_30` (Monthly Legend).
+* **⏱️ Lifetime Voice Time**: `time_10h` (Voice Novice - 10h), `time_50h` (Voice Regular - 50h), `time_100h` (Centurion - 100h), `time_250h` (Veteran - 250h), `time_500h` (Voice Titan - 500h), `time_1000h` (Voice Mythic - 1000h).
+* **🍅 Pomodoro Focus**: `focus_first` (First Sprint Done), `focus_10` (Focus Enthusiast - 10 sprints), `focus_50` (Deep Worker - 50 sprints), `focus_100` (Zen Master - 100 sprints).
+* **📺 Media & Streaming**: `stream_10h` (Broadcaster - 10h stream), `camera_10h` (Face to Face - 10h webcam).
+* **✨ Special & Community**: `night_owl` (Late Nighter - 10h between 12am-5am), `early_bird` (Morning Voice - 10h between 5am-9am), `weekend_warrior` (Weekend Hustler - 20h Sat-Sun).
+
+### 2. Profile & 3-Badge Showcase (`/profile`)
+Members can customize their personal 3-badge showcase:
+* **Slot 1 (Primary Title)**: Displayed next to your username on `/status`, compact leaderboard rows, and profile headers.
+* **Slots 2 & 3 (Showcase Trophy Rack)**: Displayed prominently on your `/profile view` card alongside total voice hours, goals completed, focus sprints, and active streaks.
+* **Commands**:
+  * **`/profile view [target: Member]`**: View dynamic profile card with equipped title, showcase rack, productivity stats, and unlock progress.
+  * **`/profile badges [target: Member] [category: Category]`**: Interactive browser for all badges with criteria and unlock status (`🔒 Locked` vs `✅ Unlocked`).
+  * **`/profile equip [slot: 1-3] [badge: ID]`**: Equip an unlocked badge with live autocomplete suggestions.
+  * **`/profile unequip [slot: 1-3]`**: Clear a showcase slot.
+
+### 3. Server-Wide Leaderboard (`/leaderboard`)
+* **Visual Top 3 Podiums**: First, second, and third place podiums highlighted with 🥇, 🥈, and 🥉 cards, custom badge titles, and total recorded hours.
+* **Filter Options**:
+  * **Periods**: `all_time`, `this_month`, `this_week`, `today`.
+  * **Metrics**: `voice` (Voice Duration), `stream` (Screen Share Duration), `camera` (Camera Duration), `focus` (Pomodoro Duration), `streak` (Daily Streaks).
+* **Interactive Pagination Buttons**: Navigate pages seamlessly with `◀️ Prev`, `Next ▶️`, and jump directly to your own position with `🎯 My Rank`.
+
+### 4. Monthly Champion Race & Automated Month-End Reset
+PurrTrack operates on an automatic monthly competition cycle:
+* **Dynamic Monthly Tracking**: The monthly leaderboard (`/leaderboard [period: this_month]`) logs voice duration for the active calendar month and displays a live countdown to the month-end reset.
+* **Automatic Month-End Reset**: At 00:00 UTC on the 1st of every month, the monthly leaderboard naturally resets back to zero for a fresh, clean start.
+* **Top 3 Monthly Champion Badges**: When the month concludes, the top 3 contributors on the server leaderboard earn permanent exclusive badges:
+  * 🥇 **Monthly Champion** (`monthly_champion_1st`): Crowned #1 on the monthly server leaderboard.
+  * 🥈 **Monthly Runner-Up** (`monthly_champion_2nd`): 2nd place on the monthly server leaderboard.
+  * 🥉 **Monthly Podium** (`monthly_champion_3rd`): 3rd place on the monthly server leaderboard.
+
+---
+
 ## 📹 Screen Share & Webcam Media Tracking
 
 PurrTrack tracks when members are actively presenting or collaborating visually:
@@ -204,8 +246,8 @@ Admins and team leads can pull timesheets across any timeframe (**Today**, **Yes
 purrtrack/
 ├── apps/
 │   ├── bot/                          # Discord Bot Service
-│   │   ├── src/commands/             # /ping, /status, /report, /config, /goal, /focus, /help
-│   │   ├── src/engine/               # Voice Tracker, Pomodoro Focus Manager & Startup Reconciler
+│   │   ├── src/commands/             # /ping, /status, /report, /config, /goal, /focus, /profile, /leaderboard, /help
+│   │   ├── src/engine/               # Voice Tracker, Focus Manager, Badge Manager & Role Reward Manager
 │   │   ├── src/exporters/            # CSV, Excel, PDF, JSON, Discord Embed generators
 │   │   ├── src/core/                 # Graceful exit watchdog, structured logger, announcer
 │   │   ├── src/events/               # ready, voiceStateUpdate, interactionCreate
@@ -215,12 +257,12 @@ purrtrack/
 │       └── src/                      # Health check (/health) and reporting endpoints
 │
 ├── packages/
-│   ├── shared/                       # Contracts, Zod schemas, DTOs, and time utilities
-│   │   └── src/                      # Session schemas, report schemas, duration formatters
+│   ├── shared/                       # Contracts, Zod schemas, DTOs, badge definitions, time utilities
+│   │   └── src/                      # Session schemas, report schemas, duration formatters, badge metadata
 │   │
 │   └── db/                           # Drizzle ORM PostgreSQL Persistence
-│       ├── src/schema/               # voice_sessions, session_segments, guild_settings, user_goals
-│       ├── src/repositories/         # VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository
+│       ├── src/schema/               # voice_sessions, session_segments, guild_settings, user_goals, user_badges
+│       ├── src/repositories/         # VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository, UserBadgesRepository
 │       └── drizzle/                  # Auto-generated SQL migrations
 │
 ├── docker-compose.yml                # Dedicated PostgreSQL 16 container (port 5438)
@@ -324,7 +366,11 @@ pnpm dev
 | `/config` | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
 | `/config` | `channel_ignore` | `channel: Channel` | Admin / Owner | Adds a voice channel to the ignore list (bypasses tracking). |
 | `/config` | `channel_unignore` | `channel: Channel` | Admin / Owner | Removes a voice channel from the ignore list with dynamic autocomplete. |
-| `/config` | `set` | `[enabled]`, `[exclude_afk]`, `[track_muted]`, `[track_deafened]`, `[track_streaming]`, `[track_camera]`, `[announce_channel]` | Admin / Owner | Updates voice tracking policies and announcement preferences. |
+| `/profile` | `view` | `[target: Member]` | Public | View member profile card, equipped title, showcase rack, productivity stats, and unlock progress. |
+| `/profile` | `badges` | `[target: Member]`, `[category: Category]` | Public | Browse all 26 achievement badges with criteria, icons, and unlock status. |
+| `/profile` | `equip` | `slot: Number (1-3)`, `badge: Badge` | Self | Equip an unlocked badge into your showcase (Slot 1 = Primary Title, Slots 2-3 = Showcase Rack) with autocomplete. |
+| `/profile` | `unequip` | `slot: Number (1-3)` | Self | Unequip a badge from your showcase. |
+| `/leaderboard` | — | `[period: Period]`, `[metric: Metric]`, `[page: Number]` | Public | View server leaderboard with visual podiums (🥇🥈🥉), badge titles, and button pagination (◀️ Prev, Next ▶️, 🎯 My Rank). |
 | `/help` | — | — | Public | Displays interactive command guide and feature documentation. |
 
 ---

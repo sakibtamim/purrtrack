@@ -308,5 +308,87 @@ describe('PostgreSQL Repositories Integration Suite', () => {
       endedAt: new Date(),
     });
   });
+
+  it('ContractorRatesRepository: sets, reads, lists, and removes billing rates', async () => {
+    const { ContractorRatesRepository } = await import('./contractor-rates-repository.js');
+    const ratesRepo = new ContractorRatesRepository();
+    const contractorId = `contractor_${Date.now()}`;
+    const adminId = `admin_${Date.now()}`;
+
+    // Initially has no rate
+    const initial = await ratesRepo.getRate(testGuildId, contractorId);
+    expect(initial).toBeNull();
+
+    // Set rate with default currency (BDT)
+    const rate1 = await ratesRepo.setRate(testGuildId, contractorId, 50000, 'BDT', adminId);
+    expect(rate1).toBeDefined();
+    expect(rate1.hourlyRateCents).toBe(50000);
+    expect(rate1.currency).toBe('BDT');
+
+    // Update rate with custom currency (USD)
+    const rate2 = await ratesRepo.setRate(testGuildId, contractorId, 3500, 'USD', adminId);
+    expect(rate2.hourlyRateCents).toBe(3500);
+    expect(rate2.currency).toBe('USD');
+
+    // Read rate
+    const fetched = await ratesRepo.getRate(testGuildId, contractorId);
+    expect(fetched?.hourlyRateCents).toBe(3500);
+    expect(fetched?.currency).toBe('USD');
+
+    // List rates
+    const allRates = await ratesRepo.listGuildRates(testGuildId);
+    expect(allRates.some((r) => r.userId === contractorId)).toBe(true);
+
+    // Remove rate
+    const removed = await ratesRepo.removeRate(testGuildId, contractorId);
+    expect(removed).toBe(true);
+
+    const postRemove = await ratesRepo.getRate(testGuildId, contractorId);
+    expect(postRemove).toBeNull();
+  });
+
+  it('TimeAdjustmentsRepository: records adjustments, queries history, and computes net seconds', async () => {
+    const { TimeAdjustmentsRepository } = await import('./time-adjustments-repository.js');
+    const timeRepo = new TimeAdjustmentsRepository();
+    const targetUser = `adjusted_user_${Date.now()}`;
+    const adminUser = `admin_adj_${Date.now()}`;
+
+    // Add 1 hour (3600s)
+    const adj1 = await timeRepo.createAdjustment({
+      guildId: testGuildId,
+      userId: targetUser,
+      adjustedByUserId: adminUser,
+      type: 'ADD',
+      durationSeconds: 3600,
+      reason: 'Client call outside Discord',
+    });
+    expect(adj1.id).toBeDefined();
+    expect(adj1.durationSeconds).toBe(3600);
+    expect(adj1.type).toBe('ADD');
+
+    // Subtract 15 mins (900s)
+    const adj2 = await timeRepo.createAdjustment({
+      guildId: testGuildId,
+      userId: targetUser,
+      adjustedByUserId: adminUser,
+      type: 'SUBTRACT',
+      durationSeconds: 900,
+      reason: 'Left voice connected while idle',
+    });
+    expect(adj2.durationSeconds).toBe(900);
+    expect(adj2.type).toBe('SUBTRACT');
+
+    // Query user history
+    const userHistory = await timeRepo.getUserAdjustments(testGuildId, targetUser);
+    expect(userHistory.length).toBe(2);
+
+    // Compute net adjustment: 3600 - 900 = 2700
+    const net = await timeRepo.getNetAdjustmentSeconds(testGuildId, targetUser);
+    expect(net).toBe(2700);
+
+    // Guild recent adjustments
+    const recent = await timeRepo.getRecentGuildAdjustments(testGuildId, 10);
+    expect(recent.length).toBeGreaterThanOrEqual(2);
+  });
 });
 

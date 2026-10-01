@@ -10,6 +10,7 @@ export const guildSettings = pgTable('guild_settings', {
   excludeAfk: boolean('exclude_afk').notNull().default(true),
   minDurationSeconds: integer('min_duration_seconds').notNull().default(10),
   timezone: varchar('timezone', { length: 50 }).notNull().default('UTC'),
+  maxInactiveMinutes: integer('max_inactive_minutes').notNull().default(0),
   ignoredChannelIds: jsonb('ignored_channel_ids').$type<string[]>().default([]),
   adminRoleIds: jsonb('admin_role_ids').$type<string[]>().default([]),
   announceChannelId: varchar('announce_channel_id', { length: 32 }),

@@ -5,3 +5,5 @@ export * from './voice-sessions';
 export * from './session-segments';
 export * from './user-goals';
 export * from './user-badges';
+export * from './contractor-rates';
+export * from './time-adjustments';

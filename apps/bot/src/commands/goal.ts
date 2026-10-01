@@ -45,6 +45,11 @@ export const goalCommand = new SlashCommandBuilder()
             { name: 'Tuesday', value: 'tuesday' }
           )
       )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('reset')
+      .setDescription('Reset or cancel your current active weekly goal')
   );
 
 export async function handleGoalCommand(
@@ -60,6 +65,34 @@ export async function handleGoalCommand(
 
   const subcommand = interaction.options.getSubcommand();
 
+  if (subcommand === 'reset') {
+    await interaction.deferReply({ ephemeral: true });
+    const existingGoal = await goalsRepo.getGoal(guildId, interaction.user.id);
+    if (!existingGoal || !existingGoal.hasActiveGoal) {
+      await interaction.editReply({
+        content: 'ℹ️ You do not have an active weekly goal to reset. You can set one anytime with `/goal set`!',
+      });
+      return;
+    }
+
+    await goalsRepo.resetGoal(guildId, interaction.user.id);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x3B82F6)
+      .setTitle('🔄 Weekly Goal Reset')
+      .setDescription(
+        `Your active weekly goal has been cancelled.\n\n` +
+          `• **Tracked Hours**: All your recorded voice time remains safely stored in the database.\n` +
+          `• **Streaks**: Your daily activity streaks are completely unaffected.\n\n` +
+          `You are free to set a new goal anytime using \`/goal set\`!`
+      )
+      .setFooter({ text: 'PurrTrack Productivity' })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
   if (subcommand === 'set') {
     const targetHours = interaction.options.getInteger('target_hours');
     const weekStart = interaction.options.getString('week_start');
@@ -74,23 +107,92 @@ export async function handleGoalCommand(
 
     await interaction.deferReply({ ephemeral: true });
 
+    // 1. Guard Rail: Check if user already has an active, unfinished goal for the current cycle
+    const existingGoal = await goalsRepo.getGoal(guildId, interaction.user.id);
+    let previousGoalFinished = false;
+
+    if (existingGoal && existingGoal.hasActiveGoal) {
+      const activeWeekStart = existingGoal.weekStartDay || 'monday';
+      const { startDate, endDate } = resolveTimeRange(TimeRangePreset.THIS_WEEK, undefined, undefined, activeWeekStart);
+
+      // Check if the active goal was set for the current week cycle
+      const isCurrentCycle =
+        !existingGoal.cycleStartDate || existingGoal.cycleStartDate.getTime() >= startDate.getTime();
+
+      if (isCurrentCycle) {
+        // Query progress for the current week
+        const report = await sessionRepo.getAggregatedReport({
+          guildId,
+          guildName: interaction.guild?.name || 'Server',
+          userId: interaction.user.id,
+          startDate,
+          endDate,
+          preset: TimeRangePreset.THIS_WEEK,
+        });
+
+        const trackedSeconds = report.totalDurationSeconds;
+        const targetSeconds = existingGoal.weeklyTargetSeconds;
+        const isFinished = trackedSeconds >= targetSeconds;
+
+        if (!isFinished) {
+          // GUARD RAIL TRIGGERED: Goal is in-progress and not finished yet
+          const percent = targetSeconds > 0 ? (trackedSeconds / targetSeconds) * 100 : 0;
+          const remainingSeconds = Math.max(0, targetSeconds - trackedSeconds);
+          const progressBar = renderProgressBar(percent, 10);
+
+          const now = new Date();
+          const currentDay = now.getUTCDay();
+          const startDayIndex = getWeekStartDayIndex(activeWeekStart);
+          const diff = (currentDay - startDayIndex + 7) % 7;
+          const daysRemaining = 6 - diff;
+          const capitalStartDay = activeWeekStart.charAt(0).toUpperCase() + activeWeekStart.slice(1);
+
+          const embed = new EmbedBuilder()
+            .setColor(0xF59E0B) // Warning amber
+            .setTitle('⚠️ Active Weekly Goal in Progress')
+            .setDescription(
+              `You already have an active weekly goal running in this server!\n\n` +
+                `• **Current Target**: \`${formatDuration(targetSeconds)}\`\n` +
+                `• **Tracked This Week**: \`${formatDuration(trackedSeconds)}\`\n` +
+                `• **Remaining**: \`${formatDuration(remainingSeconds)}\` to go\n` +
+                `• **Progress**: \`${progressBar}\`\n` +
+                `• **Cycle Ends**: ⏳ ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining (Resets every ${capitalStartDay} 00:00 UTC)\n\n` +
+                `You cannot add or modify your goal until your active goal is **finished (100%)** or the weekly cycle resets.\n\n` +
+                `💡 *If you cannot finish your goal and need to forfeit/cancel it, use \`/goal reset\`.*`
+            )
+            .setFooter({ text: 'PurrTrack Productivity Guard' });
+
+          await interaction.editReply({ embeds: [embed] });
+          return;
+        }
+
+        previousGoalFinished = true;
+      }
+    }
+
+    const effectiveWeekStart = weekStart ?? existingGoal?.weekStartDay ?? 'monday';
+    const { startDate } = resolveTimeRange(TimeRangePreset.THIS_WEEK, undefined, undefined, effectiveWeekStart);
+
     const updated = await goalsRepo.setGoal({
       guildId,
       userId: interaction.user.id,
       targetHours: targetHours ?? undefined,
       weekStartDay: weekStart ?? undefined,
+      cycleStartDate: startDate,
     });
 
     const capitalDay = updated.weekStartDay.charAt(0).toUpperCase() + updated.weekStartDay.slice(1);
     const targetHoursDisplay = Math.round(updated.weeklyTargetSeconds / 3600);
 
+    const titlePrefix = previousGoalFinished ? '🎉 Goal Achieved! New Weekly Goal Set' : '🎯 Weekly Voice Goal Activated';
     const embed = new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setTitle('🎯 Weekly Voice Goal Updated')
+      .setColor(0x10B981)
+      .setTitle(titlePrefix)
       .setDescription(
-        `Your weekly voice settings have been updated:\n\n` +
+        `Your weekly voice goal has been successfully ${previousGoalFinished ? 'updated' : 'activated'}!\n\n` +
           `• **Weekly Target**: \`${formatDuration(updated.weeklyTargetSeconds)}\` (${targetHoursDisplay} hours)\n` +
-          `• **Week Starts On**: **${capitalDay}** (Cycle resets every ${capitalDay} 00:00 UTC)\n\n` +
+          `• **Week Starts On**: **${capitalDay}** (Cycle resets every ${capitalDay} 00:00 UTC)\n` +
+          `• **Goal Guard**: Active until completed (100%) or cycle ends\n\n` +
           `Track your progress anytime with \`/goal view\`!`
       )
       .setFooter({ text: 'PurrTrack Productivity' })

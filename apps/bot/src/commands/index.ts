@@ -18,6 +18,7 @@ import { reportCommand, handleReportCommand } from './report.js';
 import { configCommand, handleConfigCommand, handleConfigAutocomplete } from './config.js';
 import { helpCommand, handleHelpCommand } from './help.js';
 import { pingCommand, handlePingCommand } from './ping.js';
+import { healthCommand, handleHealthCommand } from './health.js';
 import { goalCommand, handleGoalCommand } from './goal.js';
 import { focusCommand, handleFocusCommand } from './focus.js';
 import { profileCommand, handleProfileCommand, handleProfileAutocomplete } from './profile.js';
@@ -27,6 +28,7 @@ import { logger } from '../core/logger.js';
 
 export const slashCommands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
   pingCommand.toJSON(),
+  healthCommand.toJSON(),
   statusCommand.toJSON(),
   reportCommand.toJSON(),
   configCommand.toJSON(),
@@ -56,6 +58,10 @@ export async function dispatchSlashCommand(
     switch (commandName) {
       case 'ping':
         await handlePingCommand(interaction);
+        break;
+
+      case 'health':
+        await handleHealthCommand(interaction);
         break;
 
       case 'status':

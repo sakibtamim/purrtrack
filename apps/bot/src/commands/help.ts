@@ -15,6 +15,10 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
     )
     .addFields(
       {
+        name: '🩺 `/health` • 🏓 `/ping`',
+        value: 'Inspect bot health, version `v1.0.0`, process uptime, gateway latency, and memory metrics.',
+      },
+      {
         name: '⏱️ `/status [target]`',
         value: 'Inspect your active voice session, current channel, and live elapsed duration in real time.',
       },

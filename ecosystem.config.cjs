@@ -30,7 +30,7 @@ module.exports = {
       env: {
         ...process.env,
         NODE_ENV: "production",
-        API_PORT: process.env.API_PORT || 4100,
+        API_PORT: process.env.API_PORT || 5125,
         API_HOST: "0.0.0.0",
       },
     },

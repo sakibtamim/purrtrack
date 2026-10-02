@@ -3,6 +3,7 @@ import {
   AutocompleteInteraction,
   ButtonInteraction,
   RESTPostAPIChatInputApplicationCommandsJSONBody,
+  MessageFlags,
 } from 'discord.js';
 import {
   VoiceSessionRepository,
@@ -80,7 +81,7 @@ export async function dispatchSlashCommand(
         if (timeRepo) {
           await handleTimeCommand(interaction, timeRepo, settingsRepo);
         } else {
-          await interaction.reply({ content: '❌ Time adjustment service is currently unavailable.', ephemeral: true });
+          await interaction.reply({ content: '❌ Time adjustment service is currently unavailable.', flags: MessageFlags.Ephemeral });
         }
         break;
 
@@ -106,16 +107,16 @@ export async function dispatchSlashCommand(
 
       default:
         logger.warn(`[commands] Unhandled command: /${commandName}`);
-        await interaction.reply({ content: `Unknown command: /${commandName}`, ephemeral: true });
+        await interaction.reply({ content: `Unknown command: /${commandName}`, flags: MessageFlags.Ephemeral });
     }
   } catch (error) {
     logger.error(`[commands] Error executing /${commandName}:`, error);
 
     const errorMessage = '❌ An unexpected error occurred while processing this command.';
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: errorMessage, ephemeral: true }).catch(() => {});
+      await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral }).catch(() => {});
     } else {
-      await interaction.reply({ content: errorMessage, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
   }
 }

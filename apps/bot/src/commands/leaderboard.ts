@@ -6,6 +6,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } from 'discord.js';
 import {
   VoiceSessionRepository,
@@ -241,7 +242,7 @@ export async function handleLeaderboardCommand(
 ): Promise<void> {
   const { guildId, guild, user } = interaction;
   if (!guildId || !guild) {
-    await interaction.reply({ content: '❌ This command can only be used within a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used within a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -328,7 +329,7 @@ export async function handleLeaderboardButton(
     } else {
       await interaction.reply({
         content: `ℹ️ You don't have any recorded activity in this leaderboard yet!`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

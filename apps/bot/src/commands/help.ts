@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { APP_VERSION } from '@purrtrack/shared';
 
 export const helpCommand = new SlashCommandBuilder()
@@ -58,5 +58,5 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
     .setFooter({ text: `PurrTrack v${APP_VERSION} • Enterprise Voice Time Tracking` })
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }

@@ -8,8 +8,8 @@ module.exports = {
   apps: [
     {
       name: "purrtrack-bot",
-      cwd: "./apps/bot",
-      script: "dist/index.js",
+      cwd: path.resolve(__dirname, "apps/bot"),
+      script: path.resolve(__dirname, "apps/bot/dist/index.js"),
       node_args: "--import tsx",
       exec_mode: "fork",
       instances: 1,
@@ -23,8 +23,8 @@ module.exports = {
     },
     {
       name: "purrtrack-api",
-      cwd: "./apps/api",
-      script: "dist/index.js",
+      cwd: path.resolve(__dirname, "apps/api"),
+      script: path.resolve(__dirname, "apps/api/dist/index.js"),
       node_args: "--import tsx",
       exec_mode: "fork",
       instances: 1,

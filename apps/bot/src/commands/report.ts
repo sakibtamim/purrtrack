@@ -2,6 +2,7 @@ import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
   PermissionFlagsBits,
+  MessageFlags,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository, ContractorRatesRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
 import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration, zonedDateToUtc, getZonedDateParts } from '@purrtrack/shared';
@@ -210,7 +211,7 @@ export async function handleReportCommand(
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
-    await interaction.reply({ content: '❌ This command can only be used in a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used in a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -234,7 +235,7 @@ export async function handleReportCommand(
   if (subcommand === 'guild' && !isAdmin) {
     await interaction.reply({
       content: '⛔ Server-wide reports are restricted to administrators and managers.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -242,7 +243,7 @@ export async function handleReportCommand(
   if (targetUser && targetUser.id !== interaction.user.id && !isAdmin) {
     await interaction.reply({
       content: "⛔ You cannot view other members' time reports without admin permissions.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -257,7 +258,7 @@ export async function handleReportCommand(
       await interaction.reply({
         content:
           '❌ Invalid date format. Please use `YYYY-MM-DD` (e.g. `2026-09-15`) or `YYYY-MM` (e.g. `2026-09`). Start date must also be before or equal to end date.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -270,7 +271,11 @@ export async function handleReportCommand(
     endDate = resolved.endDate;
   }
 
-  await interaction.deferReply({ ephemeral: format === ExportFormat.EMBED ? false : true });
+  if (format === ExportFormat.EMBED) {
+    await interaction.deferReply();
+  } else {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
 
   try {
     // Self-Healing: Ensure all members currently in voice channels have active sessions

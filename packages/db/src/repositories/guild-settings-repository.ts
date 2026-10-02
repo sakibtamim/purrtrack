@@ -73,6 +73,10 @@ export class GuildSettingsRepository {
     return this.updateSettings(guildId, { ignoredChannelIds: Array.from(channels) });
   }
 
+  async setTimezone(guildId: string, timezone: string): Promise<GuildSetting> {
+    return this.updateSettings(guildId, { timezone });
+  }
+
   async removeIgnoredChannel(guildId: string, channelId: string): Promise<GuildSetting> {
     const settings = await this.getSettings(guildId);
     const channels = (settings.ignoredChannelIds || []).filter((id) => id !== channelId);

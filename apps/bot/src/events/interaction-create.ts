@@ -40,7 +40,7 @@ export function registerInteractionCreate(
     if (interaction.isButton()) {
       try {
         if (interaction.customId.startsWith('lb_')) {
-          await handleLeaderboardButton(interaction, sessionRepo, goalsRepo);
+          await handleLeaderboardButton(interaction, sessionRepo, goalsRepo, settingsRepo);
         } else if (interaction.customId.startsWith('status_refresh:')) {
           await handleStatusRefreshButton(interaction, sessionRepo, settingsRepo, goalsRepo);
         }

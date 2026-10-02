@@ -91,7 +91,7 @@ export async function dispatchSlashCommand(
         break;
 
       case 'leaderboard':
-        await handleLeaderboardCommand(interaction, sessionRepo, goalsRepo, badgeManager);
+        await handleLeaderboardCommand(interaction, sessionRepo, goalsRepo, badgeManager, settingsRepo);
         break;
 
       case 'help':

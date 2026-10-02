@@ -1,15 +1,17 @@
 import { EmbedBuilder } from 'discord.js';
-import { AggregatedReportData } from '@purrtrack/shared';
+import { AggregatedReportData, getTimezoneLabel, formatDateInTz } from '@purrtrack/shared';
 
 /**
  * Builds a Discord Embed visualizing the aggregated time report.
  */
 export function generateDiscordEmbed(data: AggregatedReportData): EmbedBuilder {
+  const tz = data.timezone || 'UTC';
+  const tzLabel = getTimezoneLabel(tz);
   const embed = new EmbedBuilder()
     .setColor(0x5865f2) // Discord Blurple
     .setTitle(`📊 Voice Time Report: ${data.guildName}`)
     .setDescription(
-      `**Period:** ${data.period.startDate.toLocaleDateString()} to ${data.period.endDate.toLocaleDateString()} (UTC)\n` +
+      `**Period:** ${formatDateInTz(data.period.startDate, tz)} to ${formatDateInTz(data.period.endDate, tz)} (${tzLabel})\n` +
       (data.targetUser ? `**Filtered Member:** ${data.targetUser.displayName ? `${data.targetUser.displayName} (@${data.targetUser.username})` : `@${data.targetUser.username}`}\n` : '') +
       `**Total Tracked Time:** \`${data.totalDurationFormatted}\`\n` +
       `**Total Sessions:** \`${data.totalSessions}\`\n` +

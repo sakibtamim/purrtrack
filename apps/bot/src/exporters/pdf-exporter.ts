@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { AggregatedReportData } from '@purrtrack/shared';
+import { AggregatedReportData, getTimezoneLabel, formatTimeInTz, formatDateInTz, formatDateIsoInTz } from '@purrtrack/shared';
 
 /**
  * Cleans text for standard PDF rendering.
@@ -50,8 +50,11 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', (err) => reject(err));
 
+      const tz = data.timezone || 'UTC';
+      const tzLabel = getTimezoneLabel(tz);
+
       const isInvoice = Boolean(data.contractorRate && data.targetUser);
-      const invoiceNumber = `INV-${data.period.startDate.toISOString().slice(0, 10).replace(/-/g, '')}-${data.targetUser?.id.slice(-4) || '0000'}`;
+      const invoiceNumber = `INV-${formatDateIsoInTz(data.period.startDate, tz).replace(/-/g, '')}-${data.targetUser?.id.slice(-4) || '0000'}`;
 
       // Header Banner
       doc.rect(0, 0, 595.28, 60).fill('#5865F2'); // Discord Blurple
@@ -60,7 +63,7 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
 
       if (isInvoice) {
         doc.fontSize(10).text(`Invoice #: ${invoiceNumber}`, 380, 22, { align: 'right', width: 175, lineBreak: false });
-        doc.fontSize(8).text(`Date: ${new Date().toISOString().slice(0, 10)}`, 380, 38, { align: 'right', width: 175, lineBreak: false });
+        doc.fontSize(8).text(`Date: ${formatDateInTz(new Date(), tz)}`, 380, 38, { align: 'right', width: 175, lineBreak: false });
       }
 
       doc.fillColor('#333333');
@@ -73,7 +76,7 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
         doc.font('Helvetica').text(contractorName);
       }
       doc.fontSize(10).font('Helvetica-Bold').text('Reporting Period: ', { continued: true });
-      doc.font('Helvetica').text(`${data.period.startDate.toLocaleDateString()} to ${data.period.endDate.toLocaleDateString()} (UTC)`);
+      doc.font('Helvetica').text(`${formatDateInTz(data.period.startDate, tz)} to ${formatDateInTz(data.period.endDate, tz)} (${tzLabel})`);
       if (data.manualAdjustments && data.manualAdjustments.count > 0) {
         doc.fontSize(9).font('Helvetica-Oblique').fillColor('#5865F2')
           .text(`Includes ${data.manualAdjustments.count} manual adjustment(s): ${data.manualAdjustments.netFormatted}`);
@@ -123,23 +126,23 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
 
       const tableTop = doc.y;
       const colUser = 40;
-      const colUserW = 125;
-      const colChannel = 170;
-      const colChannelW = 130;
-      const colStart = 305;
-      const colStartW = 75;
+      const colUserW = 120;
+      const colChannel = 165;
+      const colChannelW = 125;
+      const colStart = 295;
+      const colStartW = 85;
       const colEnd = 385;
-      const colEndW = 75;
-      const colDuration = 465;
-      const colDurationW = 90;
+      const colEndW = 85;
+      const colDuration = 475;
+      const colDurationW = 80;
 
       // Table Header
       doc.rect(40, tableTop, 515, 20).fill('#2B2D42');
       doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold');
       doc.text(isInvoice ? 'MEMBER' : 'USER', colUser + 5, tableTop + 6, { width: colUserW - 5, lineBreak: false });
       doc.text('CHANNEL', colChannel + 5, tableTop + 6, { width: colChannelW - 5, lineBreak: false });
-      doc.text('START (UTC)', colStart + 5, tableTop + 6, { width: colStartW - 5, lineBreak: false });
-      doc.text('END (UTC)', colEnd + 5, tableTop + 6, { width: colEndW - 5, lineBreak: false });
+      doc.text(`START (${tzLabel})`, colStart + 5, tableTop + 6, { width: colStartW - 5, lineBreak: false });
+      doc.text(`END (${tzLabel})`, colEnd + 5, tableTop + 6, { width: colEndW - 5, lineBreak: false });
       doc.text('DURATION', colDuration + 5, tableTop + 6, { width: colDurationW - 5, lineBreak: false });
 
       let currentY = tableTop + 20;
@@ -150,7 +153,7 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
       for (let i = 0; i < Math.min(data.sessions.length, 30); i++) {
         const s = data.sessions[i];
 
-        if (currentY > 720) {
+        if (currentY > 730) {
           doc.addPage();
           currentY = 40;
         }
@@ -162,8 +165,8 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
 
         const usernameText = formatUserForPdf(s.username, s.displayName);
         const channelText = sanitizePdfText(s.channelName, 'Voice Channel');
-        const startText = s.startedAt ? s.startedAt.toISOString().substring(11, 19) : '--:--:--';
-        const endText = s.endedAt ? s.endedAt.toISOString().substring(11, 19) : '--:--:--';
+        const startText = s.startedAt ? formatTimeInTz(s.startedAt, tz) : '--:--:--';
+        const endText = s.endedAt ? formatTimeInTz(s.endedAt, tz) : '--:--:--';
         const durationText = s.durationFormatted || '0s';
 
         doc.text(usernameText, colUser + 5, currentY + 5, { width: colUserW - 10, ellipsis: true, lineBreak: false });
@@ -188,7 +191,7 @@ export async function generatePdfReport(data: AggregatedReportData): Promise<Buf
 
       // Safe footer placed within printable bounds to avoid spilling onto a blank 2nd page
       doc.fontSize(8).font('Helvetica').fillColor('#999999').text(
-        `Generated by PurrTrack • ${new Date().toISOString()}`,
+        `Generated by PurrTrack • ${formatDateInTz(new Date(), tz)} (${tzLabel})`,
         40,
         765,
         { align: 'center', width: 515, lineBreak: false }

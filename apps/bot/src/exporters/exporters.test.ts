@@ -8,6 +8,7 @@ import { AggregatedReportData, TimeRangePreset } from '@purrtrack/shared';
 const mockReportData: AggregatedReportData = {
   guildId: '123456789012345678',
   guildName: 'PurrfectSoft Test Guild',
+  timezone: 'UTC',
   targetUser: {
     id: '987654321098765432',
     username: 'test_cat',

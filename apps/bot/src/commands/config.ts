@@ -6,6 +6,7 @@ import {
   EmbedBuilder,
   ChannelType,
 } from 'discord.js';
+import { normalizeTimezone, getTimezoneLabel, searchTimezones } from "@purrtrack/shared";
 import { GuildSettingsRepository, ContractorRatesRepository } from '@purrtrack/db';
 import { logger } from '../core/logger.js';
 
@@ -118,6 +119,18 @@ export const configCommand = new SlashCommandBuilder()
       .setName('rate_view')
       .setDescription('View configured contractor billing rates (Read-only for self)')
       .addUserOption((opt) => opt.setName('target').setDescription('Target member to inspect (Admin only)').setRequired(false))
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("timezone")
+      .setDescription("Set or update the server reporting timezone (Admin/Manager only)")
+      .addStringOption((opt) =>
+        opt
+          .setName("zone")
+          .setDescription("Type city, country, offset or IANA zone (e.g. Dhaka, London, UTC+6, New York)")
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
   );
 
 export async function handleConfigCommand(
@@ -143,6 +156,34 @@ export async function handleConfigCommand(
   const isManager = settings.adminRoleIds?.some((rId) => member.roles.cache.has(rId)) ?? false;
 
   const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === "timezone") {
+    if (!isAdmin && !isManager) {
+      await interaction.reply({
+        content: "⛔ Only Server Administrators and Management role members can update the server timezone.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const rawZone = interaction.options.getString("zone", true).trim();
+    const validatedZone = normalizeTimezone(rawZone);
+    if (!validatedZone) {
+      await interaction.reply({
+        content: `❌ Invalid timezone: \`${rawZone}\`.\nPlease provide a valid IANA timezone (e.g. \`Asia/Dhaka\`, \`America/New_York\`, \`Europe/London\`) or offset (e.g. \`UTC+6\`, \`UTC-5\`, \`+6\`).`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const tzLabel = getTimezoneLabel(validatedZone);
+    await settingsRepo.updateSettings(guild.id, { timezone: validatedZone });
+    await interaction.reply({
+      content: `✅ Server reporting timezone updated to **\`${validatedZone}\`** (\`${tzLabel}\`)!\nAll PDF, Excel, CSV, and embed reports will now display timestamps dynamically in this timezone.`,
+      ephemeral: true,
+    });
+    return;
+  }
 
   if (subcommand === 'view') {
     if (!isAdmin && !isManager) {
@@ -466,6 +507,25 @@ export async function handleConfigAutocomplete(
   }
 
   const subcommand = interaction.options.getSubcommand(false);
+
+  if (subcommand === "timezone") {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name !== "zone") {
+      await interaction.respond([]);
+      return;
+    }
+
+    try {
+      const currentSettings = await settingsRepo.getSettings(guild.id);
+      const choices = searchTimezones(focused.value, 25, currentSettings?.timezone);
+      await interaction.respond(choices);
+      return;
+    } catch (error) {
+      logger.error("[config:autocomplete] Error generating timezone choices:", error);
+      await interaction.respond([]).catch(() => {});
+      return;
+    }
+  }
 
   if (subcommand === 'role_remove') {
     const focused = interaction.options.getFocused(true);

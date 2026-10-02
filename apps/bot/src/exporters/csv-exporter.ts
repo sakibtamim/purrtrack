@@ -1,9 +1,11 @@
-import { AggregatedReportData } from '@purrtrack/shared';
+import { AggregatedReportData, getTimezoneLabel, formatTimeInTz, formatDateInTz } from '@purrtrack/shared';
 
 /**
  * Generates an RFC 4180 compliant CSV buffer with UTF-8 BOM so Excel opens it with proper encoding.
  */
 export async function generateCsvReport(data: AggregatedReportData): Promise<Buffer> {
+  const tz = data.timezone || 'UTC';
+  const tzLabel = getTimezoneLabel(tz);
   const headers = [
     'Session ID',
     'User ID',
@@ -11,8 +13,8 @@ export async function generateCsvReport(data: AggregatedReportData): Promise<Buf
     'Display Name',
     'Channel ID',
     'Channel Name',
-    'Start Time (UTC)',
-    'End Time (UTC)',
+    `Start Time (${tzLabel})`,
+    `End Time (${tzLabel})`,
     'Duration (Seconds)',
     'Duration (Formatted)',
     'Status',
@@ -32,7 +34,7 @@ export async function generateCsvReport(data: AggregatedReportData): Promise<Buf
   // Summary header block
   lines.push(`"# PurrTrack Time Tracking Report"`);
   lines.push(`"# Server: ${escapeCell(data.guildName).replace(/^"|"$/g, '')}"`);
-  lines.push(`"# Period: ${data.period.startDate.toISOString()} to ${data.period.endDate.toISOString()}"`);
+  lines.push(`"# Period: ${formatDateInTz(data.period.startDate, tz)} to ${formatDateInTz(data.period.endDate, tz)} (${tzLabel})"`);
   lines.push(`"# Total Duration: ${data.totalDurationFormatted} (${data.totalDurationSeconds}s)"`);
   lines.push(`"# Total Sessions: ${data.totalSessions}"`);
   lines.push(`"# Unique Users: ${data.uniqueActiveUsers}"`);
@@ -50,8 +52,8 @@ export async function generateCsvReport(data: AggregatedReportData): Promise<Buf
       session.displayName || '',
       session.channelId,
       session.channelName,
-      session.startedAt.toISOString(),
-      session.endedAt.toISOString(),
+      session.startedAt ? formatTimeInTz(session.startedAt, tz) : '',
+      session.endedAt ? formatTimeInTz(session.endedAt, tz) : '',
       session.durationSeconds,
       session.durationFormatted,
       session.status,

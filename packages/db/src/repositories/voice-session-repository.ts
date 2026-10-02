@@ -57,6 +57,7 @@ export interface ReportQueryParams {
   startDate: Date;
   endDate: Date;
   preset: TimeRangePreset;
+  timezone?: string;
 }
 
 export class VoiceSessionRepository {
@@ -548,6 +549,7 @@ export class VoiceSessionRepository {
     return {
       guildId: params.guildId,
       guildName: params.guildName,
+      timezone: params.timezone || "UTC",
       targetUser: targetUserObj,
       period: {
         preset: params.preset,

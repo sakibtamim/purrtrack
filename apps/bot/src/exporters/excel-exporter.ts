@@ -1,10 +1,12 @@
 import ExcelJS from 'exceljs';
-import { AggregatedReportData } from '@purrtrack/shared';
+import { AggregatedReportData, getTimezoneLabel, formatTimeInTz, formatDateInTz } from '@purrtrack/shared';
 
 /**
  * Generates an Excel (.xlsx) workbook buffer with summary KPI cards and a detailed sessions log.
  */
 export async function generateExcelReport(data: AggregatedReportData): Promise<Buffer> {
+  const tz = data.timezone || 'UTC';
+  const tzLabel = getTimezoneLabel(tz);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'PurrTrack Discord Bot';
   workbook.created = new Date();
@@ -96,8 +98,8 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
     'Username',
     'Display Name',
     'Channel Name',
-    'Started At (UTC)',
-    'Ended At (UTC)',
+    `Started At (${tzLabel})`,
+    `Ended At (${tzLabel})`,
     'Duration (Seconds)',
     'Duration (Formatted)',
     'Status',
@@ -128,8 +130,8 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
       session.username,
       session.displayName || '',
       session.channelName,
-      session.startedAt.toISOString().replace('T', ' ').substring(0, 19),
-      session.endedAt.toISOString().replace('T', ' ').substring(0, 19),
+      session.startedAt ? formatTimeInTz(session.startedAt, tz) : '',
+      session.endedAt ? formatTimeInTz(session.endedAt, tz) : '',
       session.durationSeconds,
       session.durationFormatted,
       session.status,

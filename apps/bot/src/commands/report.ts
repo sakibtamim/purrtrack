@@ -4,13 +4,10 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository, ContractorRatesRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
-import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration } from '@purrtrack/shared';
+import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration, zonedDateToUtc, getZonedDateParts } from '@purrtrack/shared';
 import { exportReport } from '../exporters/index.js';
 
-const now = new Date();
-const currentMonthLabel = now.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-const lastMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-const lastMonthLabel = lastMonthDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+
 
 export const reportCommand = new SlashCommandBuilder()
   .setName('report')
@@ -43,8 +40,8 @@ export const reportCommand = new SlashCommandBuilder()
             { name: 'Yesterday', value: TimeRangePreset.YESTERDAY },
             { name: 'This Week (Monday - Now)', value: TimeRangePreset.THIS_WEEK },
             { name: 'Last Week', value: TimeRangePreset.LAST_WEEK },
-            { name: `${currentMonthLabel} (This Month)`, value: TimeRangePreset.THIS_MONTH },
-            { name: `${lastMonthLabel} (Last Month)`, value: TimeRangePreset.LAST_MONTH },
+            { name: 'This Month', value: TimeRangePreset.THIS_MONTH },
+            { name: 'Last Month', value: TimeRangePreset.LAST_MONTH },
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
       )
@@ -88,8 +85,8 @@ export const reportCommand = new SlashCommandBuilder()
             { name: 'Yesterday', value: TimeRangePreset.YESTERDAY },
             { name: 'This Week', value: TimeRangePreset.THIS_WEEK },
             { name: 'Last Week', value: TimeRangePreset.LAST_WEEK },
-            { name: `${currentMonthLabel} (This Month)`, value: TimeRangePreset.THIS_MONTH },
-            { name: `${lastMonthLabel} (Last Month)`, value: TimeRangePreset.LAST_MONTH },
+            { name: 'This Month', value: TimeRangePreset.THIS_MONTH },
+            { name: 'Last Month', value: TimeRangePreset.LAST_MONTH },
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
       )
@@ -116,27 +113,26 @@ export const reportCommand = new SlashCommandBuilder()
  */
 export function parseCustomDateRange(
   startStr?: string | null,
-  endStr?: string | null
+  endStr?: string | null,
+  timezone: string = 'UTC'
 ): { startDate: Date; endDate: Date; label: string } | null | 'INVALID' {
   if (!startStr || !startStr.trim()) {
     if (endStr && endStr.trim()) return 'INVALID';
     return null;
   }
 
+  const tz = timezone || 'UTC';
   const cleanedStart = startStr.trim().toLowerCase();
   const cleanedEnd = endStr ? endStr.trim().toLowerCase() : null;
 
   if (cleanedStart === 'today') {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
-    return { startDate: start, endDate: now, label: 'Today (Custom)' };
+    const resolved = resolveTimeRange(TimeRangePreset.TODAY, undefined, undefined, 'monday', tz);
+    return { startDate: resolved.startDate, endDate: new Date(), label: 'Today (Custom)' };
   }
 
   if (cleanedStart === 'yesterday') {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0, 0));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 23, 59, 59, 999));
-    return { startDate: start, endDate: end, label: 'Yesterday (Custom)' };
+    const resolved = resolveTimeRange(TimeRangePreset.YESTERDAY, undefined, undefined, 'monday', tz);
+    return { startDate: resolved.startDate, endDate: resolved.endDate, label: 'Yesterday (Custom)' };
   }
 
   // Month format: YYYY-MM
@@ -146,9 +142,9 @@ export function parseCustomDateRange(
     const month = parseInt(monthMatch[2], 10) - 1;
     if (month < 0 || month > 11) return 'INVALID';
 
-    const startDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-    const monthName = startDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    const startDate = zonedDateToUtc(year, month, 1, 0, 0, 0, 0, tz);
+    const endDate = zonedDateToUtc(year, month + 1, 0, 23, 59, 59, 999, tz);
+    const monthName = startDate.toLocaleString('en-US', { month: 'long', timeZone: tz });
     return { startDate, endDate, label: `${monthName} ${year}` };
   }
 
@@ -159,9 +155,10 @@ export function parseCustomDateRange(
   const sYear = parseInt(dateMatch[1], 10);
   const sMonth = parseInt(dateMatch[2], 10) - 1;
   const sDay = parseInt(dateMatch[3], 10);
-  const startDate = new Date(Date.UTC(sYear, sMonth, sDay, 0, 0, 0, 0));
+  const startDate = zonedDateToUtc(sYear, sMonth, sDay, 0, 0, 0, 0, tz);
 
-  if (isNaN(startDate.getTime()) || startDate.getUTCDate() !== sDay || startDate.getUTCMonth() !== sMonth) {
+  const startParts = getZonedDateParts(startDate, tz);
+  if (startParts.year !== sYear || startParts.month !== sMonth || startParts.day !== sDay) {
     return 'INVALID';
   }
 
@@ -176,13 +173,14 @@ export function parseCustomDateRange(
       const eYear = parseInt(endMonthMatch[1], 10);
       const eMonth = parseInt(endMonthMatch[2], 10) - 1;
       if (eMonth < 0 || eMonth > 11) return 'INVALID';
-      endDate = new Date(Date.UTC(eYear, eMonth + 1, 0, 23, 59, 59, 999));
+      endDate = zonedDateToUtc(eYear, eMonth + 1, 0, 23, 59, 59, 999, tz);
     } else if (endDateMatch) {
       const eYear = parseInt(endDateMatch[1], 10);
       const eMonth = parseInt(endDateMatch[2], 10) - 1;
       const eDay = parseInt(endDateMatch[3], 10);
-      endDate = new Date(Date.UTC(eYear, eMonth, eDay, 23, 59, 59, 999));
-      if (isNaN(endDate.getTime()) || endDate.getUTCDate() !== eDay || endDate.getUTCMonth() !== eMonth) {
+      endDate = zonedDateToUtc(eYear, eMonth, eDay, 23, 59, 59, 999, tz);
+      const endParts = getZonedDateParts(endDate, tz);
+      if (endParts.year !== eYear || endParts.month !== eMonth || endParts.day !== eDay) {
         return 'INVALID';
       }
     } else {
@@ -192,7 +190,7 @@ export function parseCustomDateRange(
     label = `${cleanedStart} to ${cleanedEnd}`;
   } else {
     // Single day
-    endDate = new Date(Date.UTC(sYear, sMonth, sDay, 23, 59, 59, 999));
+    endDate = zonedDateToUtc(sYear, sMonth, sDay, 23, 59, 59, 999, tz);
     label = cleanedStart;
   }
 
@@ -312,6 +310,7 @@ export async function handleReportCommand(
       startDate,
       endDate,
       preset: activePreset,
+      timezone: settings.timezone || "UTC",
     });
 
     // Apply manual adjustments if targeting an individual user

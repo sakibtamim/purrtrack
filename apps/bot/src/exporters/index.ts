@@ -1,5 +1,5 @@
 import { AttachmentBuilder } from 'discord.js';
-import { AggregatedReportData, ExportFormat } from '@purrtrack/shared';
+import { AggregatedReportData, ExportFormat, formatDateIsoInTz } from '@purrtrack/shared';
 import { generateCsvReport } from './csv-exporter.js';
 import { generateExcelReport } from './excel-exporter.js';
 import { generatePdfReport } from './pdf-exporter.js';
@@ -16,7 +16,7 @@ export async function exportReport(
   data: AggregatedReportData,
   format: ExportFormat
 ): Promise<ExportResult> {
-  const timestamp = new Date().toISOString().substring(0, 10);
+  const timestamp = formatDateIsoInTz(new Date(), data.timezone || 'UTC');
   const filePrefix = `purrtrack-${data.guildId}-${timestamp}`;
 
   switch (format) {

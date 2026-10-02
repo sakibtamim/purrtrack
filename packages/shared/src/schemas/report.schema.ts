@@ -54,6 +54,7 @@ export type TopUserItem = z.infer<typeof topUserItemSchema>;
 export const aggregatedReportDataSchema = z.object({
   guildId: z.string(),
   guildName: z.string(),
+  timezone: z.string().default("UTC"),
   targetUser: z
     .object({
       id: z.string(),

@@ -74,4 +74,15 @@ describe('parseCustomDateRange Helper', () => {
     expect(parseCustomDateRange('2026-13-01')).toBe('INVALID');
     expect(parseCustomDateRange('2026-02-31')).toBe('INVALID');
   });
+
+  it("parses dates according to the provided timezone", () => {
+    const res = parseCustomDateRange("2026-09-15", undefined, "Asia/Dhaka");
+    expect(res).not.toBeNull();
+    expect(res).not.toBe("INVALID");
+    if (res && res !== "INVALID") {
+      // 2026-09-15 00:00:00 in Asia/Dhaka (UTC+6) is 2026-09-14 18:00:00 UTC
+      expect(res.startDate.toISOString()).toBe("2026-09-14T18:00:00.000Z");
+    }
+  });
+
 });

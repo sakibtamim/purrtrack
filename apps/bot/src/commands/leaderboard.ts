@@ -10,10 +10,13 @@ import {
 import {
   VoiceSessionRepository,
   UserGoalsRepository,
+  GuildSettingsRepository,
 } from '@purrtrack/db';
 import {
   TimeRangePreset,
   resolveTimeRange,
+  getZonedDateParts,
+  zonedDateToUtc,
   formatDuration,
   renderBadgePill,
 } from '@purrtrack/shared';
@@ -26,10 +29,10 @@ export const leaderboardCommand = new SlashCommandBuilder()
   .addStringOption((opt) =>
     opt
       .setName('period')
-      .setDescription(`Timeframe for the leaderboard (default: ${currentMonthName})`)
+      .setDescription('Timeframe for the leaderboard (default: This Month)')
       .setRequired(false)
       .addChoices(
-        { name: `🗓️ ${currentMonthName} (Championship)`, value: 'this_month' },
+        { name: '🗓️ This Month (Championship)', value: 'this_month' },
         { name: '📅 This Week', value: 'this_week' },
         { name: '👑 All Time', value: 'all_time' }
       )
@@ -61,12 +64,15 @@ export async function buildLeaderboardEmbed(params: {
   sessionRepo: VoiceSessionRepository;
   goalsRepo: UserGoalsRepository;
   callerUserId: string;
+  timezone?: string;
 }): Promise<{ embed: EmbedBuilder; row: ActionRowBuilder<ButtonBuilder>; totalPages: number }> {
-  const { guildId, guildName, period, metric, page, sessionRepo, goalsRepo, callerUserId } = params;
+  const { guildId, guildName, period, metric, page, sessionRepo, goalsRepo, callerUserId, timezone } = params;
+  const tz = timezone || 'UTC';
 
   const now = new Date();
-  const currentMonthName = now.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-  const currentYear = now.getUTCFullYear();
+  const parts = getZonedDateParts(now, tz);
+  const currentMonthName = now.toLocaleString('en-US', { month: 'long', timeZone: tz });
+  const currentYear = parts.year;
 
   let rankedItems: { userId: string; username: string; displayName?: string; value: number; valueStr: string }[] = [];
   let periodTitle = 'This Week';
@@ -94,13 +100,14 @@ export async function buildLeaderboardEmbed(params: {
       periodTitle = 'All Time';
     }
 
-    const { startDate, endDate } = resolveTimeRange(preset);
+    const { startDate, endDate } = resolveTimeRange(preset, undefined, undefined, 'monday', tz);
     const report = await sessionRepo.getAggregatedReport({
       guildId,
       guildName,
       startDate,
       endDate,
       preset,
+      timezone: tz,
     });
 
     rankedItems = (report.topUsers ?? []).map((u) => ({
@@ -124,7 +131,7 @@ export async function buildLeaderboardEmbed(params: {
   const callerRankStr =
     callerRankIndex >= 0 ? `#${callerRankIndex + 1} of ${rankedItems.length}` : 'Unranked';
 
-  const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59));
+  const endOfMonth = zonedDateToUtc(parts.year, parts.month + 1, 0, 23, 59, 59, 999, tz);
   const daysRemaining = Math.max(1, Math.ceil((endOfMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
   let raceNotice = '';
@@ -229,7 +236,8 @@ export async function handleLeaderboardCommand(
   interaction: ChatInputCommandInteraction,
   sessionRepo: VoiceSessionRepository,
   goalsRepo: UserGoalsRepository,
-  badgeManager?: any
+  badgeManager?: any,
+  settingsRepo?: GuildSettingsRepository
 ): Promise<void> {
   const { guildId, guild, user } = interaction;
   if (!guildId || !guild) {
@@ -245,6 +253,8 @@ export async function handleLeaderboardCommand(
   const period = (interaction.options.getString('period') || 'this_month') as 'this_week' | 'this_month' | 'all_time';
   const metric = (interaction.options.getString('metric') || 'voice') as 'voice' | 'streak';
   const page = interaction.options.getInteger('page') || 1;
+  const settings = settingsRepo ? await settingsRepo.getSettings(guildId) : null;
+  const timezone = settings?.timezone || 'UTC';
 
   await interaction.deferReply();
 
@@ -257,6 +267,7 @@ export async function handleLeaderboardCommand(
     sessionRepo,
     goalsRepo,
     callerUserId: user.id,
+    timezone,
   });
 
   await interaction.editReply({ embeds: [embed], components: [row] });
@@ -268,10 +279,13 @@ export async function handleLeaderboardCommand(
 export async function handleLeaderboardButton(
   interaction: ButtonInteraction,
   sessionRepo: VoiceSessionRepository,
-  goalsRepo: UserGoalsRepository
+  goalsRepo: UserGoalsRepository,
+  settingsRepo?: GuildSettingsRepository
 ): Promise<void> {
   const { customId, guildId, guild, user } = interaction;
   if (!guildId || !guild) return;
+  const settings = settingsRepo ? await settingsRepo.getSettings(guildId) : null;
+  const timezone = settings?.timezone || 'UTC';
 
   const parts = customId.split(':');
   const action = parts[0];
@@ -296,13 +310,14 @@ export async function handleLeaderboardButton(
       if (period === 'this_month') preset = TimeRangePreset.THIS_MONTH;
       if (period === 'all_time') preset = TimeRangePreset.ALL_TIME;
 
-      const { startDate, endDate } = resolveTimeRange(preset);
+      const { startDate, endDate } = resolveTimeRange(preset, undefined, undefined, 'monday', timezone);
       const report = await sessionRepo.getAggregatedReport({
         guildId,
         guildName: guild.name,
         startDate,
         endDate,
         preset,
+        timezone,
       });
       rankedItems = (report.topUsers ?? []).map((u) => u.userId);
     }
@@ -330,6 +345,7 @@ export async function handleLeaderboardButton(
     sessionRepo,
     goalsRepo,
     callerUserId: user.id,
+    timezone,
   });
 
   await interaction.editReply({ embeds: [embed], components: [row] });

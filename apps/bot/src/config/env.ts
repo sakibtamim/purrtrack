@@ -26,11 +26,11 @@ if (isMissingCore) {
 }
 
 const envSchema = z.object({
-  DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN is required'),
-  DISCORD_CLIENT_ID: z.string().min(1, 'DISCORD_CLIENT_ID is required'),
-  DISCORD_GUILD_ID: z.string().optional(),
-  DISCORD_ANNOUNCE_CHANNEL_ID: z.string().optional(),
-  DATABASE_URL: z.string().default('postgres://purrtrack:purrtrack_password@localhost:5438/purrtrack'),
+  DISCORD_BOT_TOKEN: z.string().min(1, 'DISCORD_BOT_TOKEN is required').transform((s) => s.trim()),
+  DISCORD_CLIENT_ID: z.string().min(1, 'DISCORD_CLIENT_ID is required').transform((s) => s.trim()),
+  DISCORD_GUILD_ID: z.string().optional().transform((s) => s?.trim()),
+  DISCORD_ANNOUNCE_CHANNEL_ID: z.string().optional().transform((s) => s?.trim()),
+  DATABASE_URL: z.string().default('postgres://purrtrack:purrtrack_password@localhost:5438/purrtrack').transform((s) => s.trim()),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
@@ -53,21 +53,21 @@ export function getEnv(): BotEnv {
 
 export const env = {
   get DISCORD_BOT_TOKEN() {
-    return process.env.DISCORD_BOT_TOKEN || '';
+    return (process.env.DISCORD_BOT_TOKEN || '').trim();
   },
   get DISCORD_CLIENT_ID() {
-    return process.env.DISCORD_CLIENT_ID || '';
+    return (process.env.DISCORD_CLIENT_ID || '').trim();
   },
   get DISCORD_GUILD_ID() {
-    return process.env.DISCORD_GUILD_ID;
+    return process.env.DISCORD_GUILD_ID?.trim();
   },
   get DISCORD_ANNOUNCE_CHANNEL_ID() {
-    return process.env.DISCORD_ANNOUNCE_CHANNEL_ID;
+    return process.env.DISCORD_ANNOUNCE_CHANNEL_ID?.trim();
   },
   get DATABASE_URL() {
-    return process.env.DATABASE_URL || 'postgres://purrtrack:purrtrack_password@localhost:5438/purrtrack';
+    return (process.env.DATABASE_URL || 'postgres://purrtrack:purrtrack_password@localhost:5438/purrtrack').trim();
   },
   get NODE_ENV() {
-    return process.env.NODE_ENV || 'development';
+    return (process.env.NODE_ENV || 'development').trim();
   },
 };

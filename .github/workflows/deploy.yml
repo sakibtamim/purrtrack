@@ -73,7 +73,7 @@ jobs:
 
             # Build all monorepo packages
             echo "Building monorepo..."
-            pnpm build
+            pnpm build --force
 
             # Ensure PM2 is installed and reload apps
             echo "Restarting PM2 processes..."

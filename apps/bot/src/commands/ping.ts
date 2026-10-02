@@ -6,7 +6,8 @@ export const pingCommand = new SlashCommandBuilder()
   .setDescription('🏓 Check bot latency and responsiveness');
 
 export async function handlePingCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-  const sent = await interaction.reply({ content: '🏓 Pinging...', fetchReply: true });
+  await interaction.reply({ content: '🏓 Pinging...' });
+  const sent = await interaction.fetchReply();
   const latency = sent.createdTimestamp - interaction.createdTimestamp;
   const apiPing = Math.round(interaction.client.ws.ping);
 

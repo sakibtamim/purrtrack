@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { APP_VERSION } from '@purrtrack/shared';
 
 export const pingCommand = new SlashCommandBuilder()
   .setName('ping')
@@ -10,6 +11,6 @@ export async function handlePingCommand(interaction: ChatInputCommandInteraction
   const apiPing = Math.round(interaction.client.ws.ping);
 
   await interaction.editReply(
-    `🏓 **Pong!**\n• **Bot Latency:** \`${latency}ms\`\n• **Discord API WebSocket Ping:** \`${apiPing}ms\``
+    `🏓 **Pong!**\n• **Version:** \`v${APP_VERSION}\`\n• **Bot Latency:** \`${latency}ms\`\n• **Discord API WebSocket Ping:** \`${apiPing}ms\``
   );
 }

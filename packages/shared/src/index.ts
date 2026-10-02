@@ -5,3 +5,4 @@ export * from './schemas/report.schema';
 export * from './schemas/guild.schema';
 export * from './utils/time';
 export * from './badges/badge-definitions';
+export * from './constants/version';

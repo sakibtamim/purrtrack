@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { APP_VERSION } from '@purrtrack/shared';
 
 export const helpCommand = new SlashCommandBuilder()
   .setName('help')
@@ -7,7 +8,7 @@ export const helpCommand = new SlashCommandBuilder()
 export async function handleHelpCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle('🐱 PurrTrack • TimeTrack for Discord')
+    .setTitle(`🐱 PurrTrack v${APP_VERSION} • TimeTrack for Discord`)
     .setDescription(
       'PurrTrack automatically logs your time whenever you connect to a voice channel. ' +
       'No manual check-ins needed!'
@@ -50,7 +51,7 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
         value: 'Configure tracking rules, set contractor billing rates (`/config rate_set`), configure AFK sleep guard, designate management roles, or manage ignored channels.',
       }
     )
-    .setFooter({ text: 'PurrTrack • Enterprise Voice Time Tracking' })
+    .setFooter({ text: `PurrTrack v${APP_VERSION} • Enterprise Voice Time Tracking` })
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed], ephemeral: true });

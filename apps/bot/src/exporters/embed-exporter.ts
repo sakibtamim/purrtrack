@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { AggregatedReportData, getTimezoneLabel, formatDateInTz } from '@purrtrack/shared';
+import { AggregatedReportData, getTimezoneLabel, formatDateInTz, APP_VERSION } from '@purrtrack/shared';
 
 /**
  * Builds a Discord Embed visualizing the aggregated time report.
@@ -72,6 +72,6 @@ export function generateDiscordEmbed(data: AggregatedReportData): EmbedBuilder {
     });
   }
 
-  embed.setFooter({ text: 'PurrTrack • TimeTrack for Discord' }).setTimestamp();
+  embed.setFooter({ text: `PurrTrack v${APP_VERSION} • TimeTrack for Discord` }).setTimestamp();
   return embed;
 }

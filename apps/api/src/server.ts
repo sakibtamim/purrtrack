@@ -1,7 +1,7 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { VoiceSessionRepository, GuildSettingsRepository } from '@purrtrack/db';
-import { TimeRangePreset } from '@purrtrack/shared';
+import { TimeRangePreset, APP_VERSION } from '@purrtrack/shared';
 
 export interface ServerOptions {
   sessionRepo?: VoiceSessionRepository;
@@ -26,6 +26,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   server.get('/health', async () => {
     return {
       status: 'healthy',
+      version: APP_VERSION,
       timestamp: new Date().toISOString(),
       service: 'purrtrack-api',
       uptime: process.uptime(),

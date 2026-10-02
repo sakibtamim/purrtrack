@@ -3,6 +3,7 @@
 # 🐱 PurrTrack
 ### Enterprise Automatic Voice Time Tracking & Reporting Bot for Discord
 
+[![Version](https://img.shields.io/badge/version-v1.0.0-5865F2?logo=github&logoColor=white)](https://github.com/sakibtamim/purrtrack/releases)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![discord.js](https://img.shields.io/badge/discord.js-v14.16-5865F2?logo=discord&logoColor=white)](https://discord.js.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-v5.2-000000?logo=fastify&logoColor=white)](https://fastify.dev/)

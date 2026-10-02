@@ -1,4 +1,5 @@
 import { Client, Events, ActivityType } from 'discord.js';
+import { APP_VERSION, APP_VERSION_LABEL } from '@purrtrack/shared';
 import { StartupReconciler } from '../engine/reconciler.js';
 import { sendStartupAnnouncement } from '../core/announcer.js';
 import { logger } from '../core/logger.js';
@@ -8,16 +9,16 @@ export function registerReady(
   reconciler: StartupReconciler
 ): void {
   client.once(Events.ClientReady, async (readyClient) => {
-    logger.info(`🎉 [ready] PurrTrack is logged in as ${readyClient.user.tag}!`);
+    logger.info(`🎉 [ready] ${APP_VERSION_LABEL} is logged in as ${readyClient.user.tag}!`);
     logger.info(`🌐 [ready] Connected to ${readyClient.guilds.cache.size} server(s): ${readyClient.guilds.cache.map(g => g.name).join(', ') || 'None'}`);
 
     // Set online presence & activity
     try {
       readyClient.user.setPresence({
-        activities: [{ name: 'voice channels | /help', type: ActivityType.Watching }],
+        activities: [{ name: `voice channels | /help • v${APP_VERSION}`, type: ActivityType.Watching }],
         status: 'online',
       });
-      logger.info('🟢 [ready] Set bot presence: "Watching voice channels | /help"');
+      logger.info(`🟢 [ready] Set bot presence: "Watching voice channels | /help • v${APP_VERSION}"`);
     } catch (err) {
       logger.warn('[ready] Could not set presence:', err);
     }
@@ -36,8 +37,9 @@ export function registerReady(
 
     console.log(`
 ╔═══════════════════════════════════════════════════════════════════════╗
-║                   🐾 PURRTRACK IS ACTIVE & READY 🐾                  ║
+║               🐾 PURRTRACK v${APP_VERSION} IS ACTIVE & READY 🐾                ║
 ╠═══════════════════════════════════════════════════════════════════════╣
+║  • Version: v${APP_VERSION} (Enterprise Voice Time Tracking)                  ║
 ║  • Status: Online & actively tracking voice channels                  ║
 ║  • Bot Tag: ${readyClient.user.tag}
 ║  • Connected Guild(s):                                                ║

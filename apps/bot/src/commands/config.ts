@@ -5,6 +5,7 @@ import {
   PermissionFlagsBits,
   EmbedBuilder,
   ChannelType,
+  MessageFlags,
 } from 'discord.js';
 import { normalizeTimezone, getTimezoneLabel, searchTimezones } from "@purrtrack/shared";
 import { GuildSettingsRepository, ContractorRatesRepository } from '@purrtrack/db';
@@ -140,7 +141,7 @@ export async function handleConfigCommand(
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
-    await interaction.reply({ content: '❌ This command can only be used in a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used in a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -161,7 +162,7 @@ export async function handleConfigCommand(
     if (!isAdmin && !isManager) {
       await interaction.reply({
         content: "⛔ Only Server Administrators and Management role members can update the server timezone.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -171,7 +172,7 @@ export async function handleConfigCommand(
     if (!validatedZone) {
       await interaction.reply({
         content: `❌ Invalid timezone: \`${rawZone}\`.\nPlease provide a valid IANA timezone (e.g. \`Asia/Dhaka\`, \`America/New_York\`, \`Europe/London\`) or offset (e.g. \`UTC+6\`, \`UTC-5\`, \`+6\`).`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -180,7 +181,7 @@ export async function handleConfigCommand(
     await settingsRepo.updateSettings(guild.id, { timezone: validatedZone });
     await interaction.reply({
       content: `✅ Server reporting timezone updated to **\`${validatedZone}\`** (\`${tzLabel}\`)!\nAll PDF, Excel, CSV, and embed reports will now display timestamps dynamically in this timezone.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -189,7 +190,7 @@ export async function handleConfigCommand(
     if (!isAdmin && !isManager) {
       await interaction.reply({
         content: '⛔ Only Server Administrators and Management role members can view PurrTrack configuration.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -247,14 +248,14 @@ export async function handleConfigCommand(
       .setFooter({ text: 'PurrTrack • TimeTrack for Discord' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
   }
 
   // Rate View: Member can view their own rate; Admins/Managers can view anyone's
   if (subcommand === 'rate_view') {
     if (!ratesRepo) {
-      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', ephemeral: true });
+      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -263,7 +264,7 @@ export async function handleConfigCommand(
     if (targetUser.id !== interaction.user.id && !isAdmin && !isManager) {
       await interaction.reply({
         content: "⛔ You can only view your own configured billing rate. Inspecting other members' rates requires Admin permissions.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -273,7 +274,7 @@ export async function handleConfigCommand(
       const msg = targetUser.id === interaction.user.id
         ? 'ℹ️ You do not have a configured contractor billing rate.'
         : `ℹ️ <@${targetUser.id}> does not have a configured contractor billing rate.`;
-      await interaction.reply({ content: msg, ephemeral: true });
+      await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -290,7 +291,7 @@ export async function handleConfigCommand(
       .setFooter({ text: 'PurrTrack • Enterprise Payroll' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -299,13 +300,13 @@ export async function handleConfigCommand(
     if (!isAdmin && !isManager) {
       await interaction.reply({
         content: '⛔ Only Server Administrators and Management role members can set contractor rates.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
     if (!ratesRepo) {
-      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', ephemeral: true });
+      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -318,7 +319,7 @@ export async function handleConfigCommand(
 
     await interaction.reply({
       content: `✅ Successfully configured billing rate for <@${targetUser.id}>: **${rate.toFixed(2)} ${currency} / hr**.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -328,13 +329,13 @@ export async function handleConfigCommand(
     if (!isAdmin && !isManager) {
       await interaction.reply({
         content: '⛔ Only Server Administrators and Management role members can remove contractor rates.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
     if (!ratesRepo) {
-      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', ephemeral: true });
+      await interaction.reply({ content: '❌ Contractor rates service is currently unavailable.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -344,12 +345,12 @@ export async function handleConfigCommand(
     if (removed) {
       await interaction.reply({
         content: `✅ Removed contractor billing rate for <@${targetUser.id}>.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } else {
       await interaction.reply({
         content: `ℹ️ <@${targetUser.id}> does not have a configured billing rate.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
     return;
@@ -359,7 +360,7 @@ export async function handleConfigCommand(
   if (!isAdmin) {
     await interaction.reply({
       content: '⛔ Only Server Administrators and the Server Owner can modify PurrTrack settings or assign management roles.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -370,7 +371,7 @@ export async function handleConfigCommand(
 
     await interaction.reply({
       content: `✅ Voice channel <#${channel.id}> is now **ignored**. Voice time spent in this channel will not be tracked.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -382,7 +383,7 @@ export async function handleConfigCommand(
     if (channelId === 'none') {
       await interaction.reply({
         content: '⚠️ There are no voice channels currently ignored in this server.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -393,7 +394,7 @@ export async function handleConfigCommand(
     if (!existingChannels.includes(channelId)) {
       await interaction.reply({
         content: '⚠️ That channel is not currently on the ignored list.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -402,7 +403,7 @@ export async function handleConfigCommand(
 
     await interaction.reply({
       content: `✅ Voice channel <#${channelId}> is no longer ignored. Voice time will now be tracked.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -413,7 +414,7 @@ export async function handleConfigCommand(
 
     await interaction.reply({
       content: `✅ Successfully added <@&${role.id}> as a **Management Role**!\nMembers with this role can now:\n• View live tracking for any team member (\`/status target:@user\`)\n• Export individual timesheets (\`/report user target:@user\`)\n• Export server-wide reports (\`/report guild\`)`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -425,7 +426,7 @@ export async function handleConfigCommand(
     if (roleId === 'none') {
       await interaction.reply({
         content: '⚠️ There are no Management roles currently configured in this server.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -447,7 +448,7 @@ export async function handleConfigCommand(
     if (!existingRoles.includes(targetRoleId)) {
       await interaction.reply({
         content: `⚠️ That role is not in the configured Management Roles list.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -456,7 +457,7 @@ export async function handleConfigCommand(
 
     await interaction.reply({
       content: `✅ Successfully removed Management permissions from <@&${targetRoleId}>.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -482,7 +483,7 @@ export async function handleConfigCommand(
     if (announceChannel !== null) updates.announceChannelId = announceChannel.id;
 
     if (Object.keys(updates).length === 0) {
-      await interaction.reply({ content: '⚠️ No settings were provided to update.', ephemeral: true });
+      await interaction.reply({ content: '⚠️ No settings were provided to update.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -490,7 +491,7 @@ export async function handleConfigCommand(
 
     await interaction.reply({
       content: `✅ Successfully updated PurrTrack settings for **${guild.name}**!`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }

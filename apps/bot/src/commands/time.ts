@@ -3,6 +3,7 @@ import {
   SlashCommandBuilder,
   PermissionFlagsBits,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { GuildSettingsRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
 import { formatDuration } from '@purrtrack/shared';
@@ -154,7 +155,7 @@ export async function handleTimeCommand(
 ): Promise<void> {
   const { guild, user } = interaction;
   if (!guild) {
-    await interaction.reply({ content: '❌ This command can only be used in a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used in a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -170,7 +171,7 @@ export async function handleTimeCommand(
   if (!isAdmin) {
     await interaction.reply({
       content: '⛔ Only Server Administrators and Management role members can execute manual time adjustments or view audit trails.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -187,7 +188,7 @@ export async function handleTimeCommand(
     if (!durationSeconds) {
       await interaction.reply({
         content: `❌ Invalid duration format: \`${rawDuration}\`. Please use formats like \`1h 30m\`, \`45m\`, or \`2h\`.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -196,7 +197,7 @@ export async function handleTimeCommand(
     if (parsedDate === 'INVALID') {
       await interaction.reply({
         content: `❌ Invalid date format: \`${rawDate}\`. Please use \`YYYY-MM-DD\` (e.g. \`2026-10-01\`), \`yesterday\`, or \`today\`.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -243,7 +244,7 @@ export async function handleTimeCommand(
     if (adjustments.length === 0) {
       await interaction.reply({
         content: `ℹ️ No manual adjustments found in audit history for <@${targetUser.id}>.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -270,7 +271,7 @@ export async function handleTimeCommand(
       .setFooter({ text: 'PurrTrack • Enterprise Audit Trail' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
   }
 }

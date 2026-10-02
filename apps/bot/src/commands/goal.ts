@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { VoiceSessionRepository, UserGoalsRepository } from '@purrtrack/db';
 import { TimeRangePreset, resolveTimeRange, formatDuration, renderProgressBar, getWeekStartDayIndex } from '@purrtrack/shared';
@@ -59,14 +60,14 @@ export async function handleGoalCommand(
 ): Promise<void> {
   const { guildId } = interaction;
   if (!guildId) {
-    await interaction.reply({ content: '❌ This command can only be used within a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used within a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === 'reset') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const existingGoal = await goalsRepo.getGoal(guildId, interaction.user.id);
     if (!existingGoal || !existingGoal.hasActiveGoal) {
       await interaction.editReply({
@@ -100,12 +101,12 @@ export async function handleGoalCommand(
     if (targetHours === null && weekStart === null) {
       await interaction.reply({
         content: '❌ Please specify at least one option: `target_hours`, `week_start`, or both.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // 1. Guard Rail: Check if user already has an active, unfinished goal for the current cycle
     const existingGoal = await goalsRepo.getGoal(guildId, interaction.user.id);

@@ -3,6 +3,7 @@ import {
   ChatInputCommandInteraction,
   AutocompleteInteraction,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import {
   VoiceSessionRepository,
@@ -95,7 +96,7 @@ export async function handleProfileCommand(
 ): Promise<void> {
   const { guildId } = interaction;
   if (!guildId) {
-    await interaction.reply({ content: '❌ This command can only be used within a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used within a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -243,7 +244,7 @@ export async function handleProfileCommand(
     if (!badge) {
       await interaction.reply({
         content: `❌ Unknown badge: \`${badgeId}\`.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -252,12 +253,12 @@ export async function handleProfileCommand(
     if (!hasBadge) {
       await interaction.reply({
         content: `🔒 You have not unlocked the **[${badge.icon} ${badge.name}]** badge yet!\nRequirement: *${badge.requirementText}*.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const updated = await goalsRepo.equipBadge(guildId, interaction.user.id, badgeId, slot);
     const showcaseText = renderShowcaseRack(updated.equippedBadgeIds || []);
 
@@ -281,7 +282,7 @@ export async function handleProfileCommand(
   // --- SUBCOMMAND: UNEQUIP ---
   if (subcommand === 'unequip') {
     const slot = interaction.options.getInteger('slot', true);
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const updated = await goalsRepo.unequipBadge(guildId, interaction.user.id, slot);
     const showcaseText = renderShowcaseRack(updated.equippedBadgeIds || []);

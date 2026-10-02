@@ -9,6 +9,7 @@ import {
   PermissionFlagsBits,
   User,
   Guild,
+  MessageFlags,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
 import { formatDuration, renderBadgePill } from '@purrtrack/shared';
@@ -197,7 +198,7 @@ export async function handleStatusCommand(
 ): Promise<void> {
   const guild = interaction.guild;
   if (!guild) {
-    await interaction.reply({ content: '❌ This command can only be used in a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used in a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -218,7 +219,7 @@ export async function handleStatusCommand(
     if (!isManager) {
       await interaction.reply({
         content: '⛔ You can only view your own status. Inspecting other team members requires a Management or Administrator role.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -228,7 +229,7 @@ export async function handleStatusCommand(
   await interaction.reply({
     embeds: payload.embeds,
     components: payload.components,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -259,7 +260,7 @@ export async function handleStatusRefreshButton(
     if (!isManager) {
       await interaction.reply({
         content: '⛔ You do not have permission to inspect or refresh another member’s status.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

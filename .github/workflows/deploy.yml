@@ -78,8 +78,7 @@ jobs:
             # Ensure PM2 is installed and reload apps cleanly
             echo "Restarting PM2 processes..."
             command -v pm2 >/dev/null 2>&1 || npm install -g pm2 --force
-            pm2 delete all || true
-            pm2 start ecosystem.config.cjs --update-env
+            pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs --update-env
             pm2 save
 
             echo "PurrTrack deployment finished successfully!"

@@ -3,6 +3,7 @@ import {
   ChatInputCommandInteraction,
   GuildMember,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { FocusManager } from '../engine/focus-manager.js';
 import {
@@ -53,7 +54,7 @@ export async function handleFocusCommand(
 ): Promise<void> {
   const { guildId, user } = interaction;
   if (!guildId) {
-    await interaction.reply({ content: '❌ This command can only be used within a server.', ephemeral: true });
+    await interaction.reply({ content: '❌ This command can only be used within a server.', flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -65,7 +66,7 @@ export async function handleFocusCommand(
     if (!member?.voice?.channel) {
       await interaction.reply({
         content: '❌ You must be connected to a voice channel to start a focus sprint.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -82,7 +83,7 @@ export async function handleFocusCommand(
           `• Remaining: <t:${endsTimestamp}:R> (<t:${endsTimestamp}:t>)\n` +
           `• Status: \`${isWork ? 'Working Sprint' : 'Break Period'}\`\n\n` +
           `Please wait until it ends or use \`/focus stop\` before starting a new focus sprint.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -95,7 +96,7 @@ export async function handleFocusCommand(
     if (workMinutes === null) {
       await interaction.reply({
         content: '❌ Invalid timer format. Please specify a duration like `25m`, `1h`, `2h`, `90m`, or `120`.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -104,7 +105,7 @@ export async function handleFocusCommand(
     if (breakMinutes === null) {
       await interaction.reply({
         content: '❌ Invalid break format. Please specify a duration like `5m`, `10m`, or `0` to disable.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -153,7 +154,7 @@ export async function handleFocusCommand(
     if (!stopped) {
       await interaction.reply({
         content: 'ℹ️ You do not currently have an active focus session running.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -179,7 +180,7 @@ export async function handleFocusCommand(
     if (!session) {
       await interaction.reply({
         content: 'ℹ️ You have no active focus sprint. Use `/focus start` to begin!',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

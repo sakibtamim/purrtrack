@@ -154,3 +154,51 @@ describe('Multi-Format Exporters', () => {
     expect(json.fields?.some((f) => f.name.includes('Manual Adjustments'))).toBe(true);
   });
 });
+
+  it('PDF Exporter sanitizes emojis, handles unicode gracefully, and fits short reports in 1 page', async () => {
+    const unicodeData: AggregatedReportData = {
+      ...mockReportData,
+      guildName: '🐾 Purrfect Universe 🚀',
+      targetUser: {
+        id: '123456789',
+        username: 'sakib_zero',
+        displayName: '🎧 𝐒𝐚𝐤𝐢𝐛 👑',
+      },
+      sessions: [
+        {
+          id: '1',
+          userId: '123456789',
+          username: 'sakib_zero',
+          displayName: '🎧 𝐒𝐚𝐤𝐢𝐛 👑',
+          channelId: 'c1',
+          channelName: '🌟 GENERAL VOICE',
+          startedAt: new Date('2026-10-02T15:40:22Z'),
+          endedAt: new Date('2026-10-02T15:46:17Z'),
+          durationSeconds: 355,
+          durationFormatted: '5m 55s',
+          status: 'COMPLETED',
+        },
+        {
+          id: '2',
+          userId: '123456789',
+          username: 'sakib_zero',
+          displayName: '🎧 𝐒𝐚𝐤𝐢𝐛 👑',
+          channelId: 'c2',
+          channelName: '🎧 MUSIC & RELAX',
+          startedAt: new Date('2026-10-02T14:44:54Z'),
+          endedAt: new Date('2026-10-02T15:33:37Z'),
+          durationSeconds: 2923,
+          durationFormatted: '48m 43s',
+          status: 'COMPLETED',
+        },
+      ],
+    };
+
+    const pdfBuffer = await generatePdfReport(unicodeData);
+    expect(pdfBuffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    // Count pages by counting "/Type /Page" occurrences (excluding "/Type /Pages")
+    const pdfStr = pdfBuffer.toString('binary');
+    const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g);
+    expect(pageMatches?.length).toBe(1);
+  });

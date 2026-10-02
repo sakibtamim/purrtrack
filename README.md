@@ -38,7 +38,7 @@
 - [Slash Command Reference](#-slash-command-reference)
 - [Configuration & Environment Variables](#-configuration--environment-variables)
 - [Quality Gates & Testing](#-quality-gates--testing)
-- [License](#-license)
+- [License & Security](#-license--security)
 
 ---
 
@@ -487,6 +487,8 @@ pnpm build
 
 ---
 
-## 📄 License
+## 📄 License & Security
 
-MIT © [Purrfect Software Ltd](https://github.com/purrfectsoft) & [Sakib Tamim](https://github.com/sakibtamim).
+- **License**: Released under the [MIT License](LICENSE). Copyright © 2026 [Purrfect Software Ltd](https://github.com/purrfectsoft) & [Sakib Tamim](https://github.com/sakibtamim).
+- **Security Policy**: For responsible disclosure and vulnerability reports, please consult our [Security Policy](.github/SECURITY.md).
+

@@ -8,6 +8,13 @@
       "when": 1790675869440,
       "tag": "0000_rich_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790952216147,
+      "tag": "0001_charming_exiles",
+      "breakpoints": true
     }
   ]
 }

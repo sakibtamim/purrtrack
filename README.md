@@ -303,6 +303,13 @@ Admins and team leads can pull timesheets across any timeframe (**Today**, **Yes
 | **Discord Embed** | `discord.js` | Native in-chat interactive embed with top 5 voice channels, top team contributors, total hours breakdown, active live badges (`🟢 (Live)`), and recent sessions list. |
 | **JSON** | Native | Machine-readable structured payload conforming strictly to `@purrtrack/shared` DTOs. |
 
+### 🌐 Fully Dynamic Server Timezone & Regional Localization
+PurrTrack eliminates timezone confusion with zero static assumptions:
+* **Server Timezone Configuration (`/config timezone zone:...`)**: Admins and Managers can configure the server's home timezone with live autocomplete supporting all **418+ canonical IANA timezones** (`Asia/Dhaka`, `America/New_York`, `Europe/London`), city searches (`Dhaka`, `Tokyo`, `Berlin`), and offset formats (`UTC+6`, `GMT-5`, `+6`).
+* **Dynamic PDF Timesheets**: Column headers dynamically resolve to `START (${tzLabel})` and `END (${tzLabel})` (e.g. `START (UTC+6)`), displaying clean 12-hour clock timestamps (`08:44:54 PM`) within single-page printable bounds.
+* **Unified Alignment Across Exporters**: Excel, CSV, and Discord Embeds automatically format all dates, timestamps, and column headers to the configured server timezone.
+* **Timezone-Aware Date Math**: Presets (`Today`, `Yesterday`, `This Week`, `Last Week`, `This Month`, `Last Month`) calculate reporting boundaries relative to the server's local midnight rather than UTC.
+
 ---
 
 ## 📦 Monorepo Workspace Structure
@@ -438,6 +445,7 @@ pnpm dev
 | `/config` | `role_remove`| `role: Role` | Admin / Owner | Revokes Management permissions from a role. |
 | `/config` | `channel_ignore` | `channel: Channel` | Admin / Owner | Adds a voice channel to the ignore list (bypasses tracking). |
 | `/config` | `channel_unignore` | `channel: Channel` | Admin / Owner | Removes a voice channel from the ignore list with dynamic autocomplete. |
+| `/config` | `timezone` | `zone: String` | Admin / Manager | Sets or updates server reporting timezone with dynamic autocomplete (418+ IANA timezones, cities, and UTC/GMT offsets). All reports and leaderboards automatically reflect this timezone. |
 | `/profile` | `view` | `[target: Member]` | Public | View member profile card, equipped title, showcase rack, productivity stats, and unlock progress. |
 | `/profile` | `badges` | `[target: Member]`, `[category: Category]` | Public | Browse all 26 achievement badges with criteria, icons, and unlock status. |
 | `/profile` | `equip` | `slot: Number (1-3)`, `badge: Badge` | Self | Equip an unlocked badge into your showcase (Slot 1 = Primary Title, Slots 2-3 = Showcase Rack) with autocomplete. |
@@ -467,7 +475,7 @@ pnpm dev
 PurrTrack adheres to strict engineering standards. All pull requests and commits are verified against automated unit and integration tests:
 
 ```bash
-# Run complete test suite (79 unit & database integration tests across 8 suites)
+# Run complete test suite (90 unit & database integration tests across 8 suites)
 pnpm test
 
 # Run TypeScript compiler checks across all workspace packages

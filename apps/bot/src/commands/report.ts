@@ -1,12 +1,19 @@
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
-  PermissionFlagsBits,
   MessageFlags,
+  AttachmentBuilder,
+  EmbedBuilder,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository, ContractorRatesRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
-import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration, zonedDateToUtc, getZonedDateParts } from '@purrtrack/shared';
-import { exportReport } from '../exporters/index.js';
+import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration, zonedDateToUtc, getZonedDateParts, formatDateIsoInTz } from '@purrtrack/shared';
+import {
+  exportReport,
+  generatePayrollExcelReport,
+  ConsolidatedPayrollReportData,
+  ContractorPayrollItem,
+} from '../exporters/index.js';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
 
 
 
@@ -88,6 +95,49 @@ export const reportCommand = new SlashCommandBuilder()
             { name: 'Last Week', value: TimeRangePreset.LAST_WEEK },
             { name: 'This Month', value: TimeRangePreset.THIS_MONTH },
             { name: 'Last Month', value: TimeRangePreset.LAST_MONTH },
+            { name: 'All Time', value: TimeRangePreset.ALL_TIME }
+          )
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('start_date')
+          .setDescription('Custom start date (YYYY-MM-DD, or YYYY-MM for whole month, e.g. 2026-09)')
+          .setRequired(false)
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('end_date')
+          .setDescription('Custom end date (YYYY-MM-DD, optional if start_date is a month)')
+          .setRequired(false)
+      )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('payroll')
+      .setDescription('💼 Generate consolidated contractor payroll report across all billed members')
+      .addStringOption((opt) =>
+        opt
+          .setName('format')
+          .setDescription('Export format')
+          .setRequired(false)
+          .addChoices(
+            { name: '📊 Excel Spreadsheet (.xlsx Master Payroll Ledger)', value: ExportFormat.EXCEL },
+            { name: '📄 Discord Embed (Preview in Chat)', value: ExportFormat.EMBED },
+            { name: '📝 CSV File (Raw spreadsheet data)', value: ExportFormat.CSV }
+          )
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('range')
+          .setDescription('Date range preset (ignored if start_date is set)')
+          .setRequired(false)
+          .addChoices(
+            { name: 'This Month', value: TimeRangePreset.THIS_MONTH },
+            { name: 'Last Month', value: TimeRangePreset.LAST_MONTH },
+            { name: 'This Week', value: TimeRangePreset.THIS_WEEK },
+            { name: 'Last Week', value: TimeRangePreset.LAST_WEEK },
+            { name: 'Today', value: TimeRangePreset.TODAY },
+            { name: 'Yesterday', value: TimeRangePreset.YESTERDAY },
             { name: 'All Time', value: TimeRangePreset.ALL_TIME }
           )
       )
@@ -215,13 +265,10 @@ export async function handleReportCommand(
     return;
   }
 
-  // Check Admin / Manager authorization
+  // Strict RBAC permission verification
   const member = await guild.members.fetch(interaction.user.id);
   const settings = await settingsRepo.getSettings(guild.id);
-  const isAdmin =
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.permissions.has(PermissionFlagsBits.ManageGuild) ||
-    (settings.adminRoleIds && member.roles.cache.some((r) => settings.adminRoleIds?.includes(r.id)));
+  const isManager = hasManagementPermission(member, guild, settings);
 
   const subcommand = interaction.options.getSubcommand();
   const format = (interaction.options.getString('format') as ExportFormat) || ExportFormat.EMBED;
@@ -231,18 +278,233 @@ export async function handleReportCommand(
 
   const targetUser = subcommand === 'user' ? interaction.options.getUser('target') : undefined;
 
-  // Regular members can only view their own user report; Guild-wide reports require Admin/Manager
-  if (subcommand === 'guild' && !isAdmin) {
+  // Regular members can only view their own user report; Guild-wide reports require Management permission
+  if (subcommand === 'guild' && !isManager) {
     await interaction.reply({
-      content: '⛔ Server-wide reports are restricted to administrators and managers.',
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  if (targetUser && targetUser.id !== interaction.user.id && !isAdmin) {
+  if (subcommand === 'payroll') {
+    if (!isManager) {
+      await interaction.reply({
+        content: getManagementDenialMessage(settings),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (!ratesRepo) {
+      await interaction.reply({
+        content: '❌ Contractor billing service is currently unavailable.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const rates = await ratesRepo.listGuildRates(guild.id);
+    if (rates.length === 0) {
+      await interaction.reply({
+        content:
+          '⚠️ No contractor billing rates have been configured for this server yet.\nUse `/config set_rate` to set hourly rates for members before generating payroll.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    let pStartDate: Date;
+    let pEndDate: Date;
+    let pActivePreset = preset;
+
+    if (customStartStr) {
+      const parsedRange = parseCustomDateRange(customStartStr, customEndStr, settings.timezone || 'UTC');
+      if (!parsedRange || parsedRange === 'INVALID') {
+        await interaction.reply({
+          content:
+            '❌ Invalid date format. Please use `YYYY-MM-DD` (e.g. `2026-09-15`) or `YYYY-MM` (e.g. `2026-09`). Start date must also be before or equal to end date.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      pStartDate = parsedRange.startDate;
+      pEndDate = parsedRange.endDate;
+      pActivePreset = parsedRange.label as any;
+    } else {
+      const resolved = resolveTimeRange(preset, undefined, undefined, 'monday', settings.timezone || 'UTC');
+      pStartDate = resolved.startDate;
+      pEndDate = resolved.endDate;
+    }
+
+    if (format === ExportFormat.EMBED) {
+      await interaction.deferReply();
+    } else {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
+    try {
+      const contractors: ContractorPayrollItem[] = [];
+
+      for (const rate of rates) {
+        let contractorMember = guild.members.cache.get(rate.userId);
+        if (!contractorMember && guild.members?.fetch) {
+          contractorMember = (await guild.members.fetch(rate.userId).catch(() => null)) as any;
+        }
+        const username = contractorMember?.user?.username ?? `user_${rate.userId.slice(-4)}`;
+
+        const userReport = await sessionRepo.getAggregatedReport({
+          guildId: guild.id,
+          guildName: guild.name,
+          userId: rate.userId,
+          startDate: pStartDate,
+          endDate: pEndDate,
+          preset: pActivePreset,
+          timezone: settings.timezone || 'UTC',
+        });
+
+        const trackedSeconds = userReport.totalDurationSeconds;
+        let netAdjSeconds = 0;
+        if (timeRepo) {
+          netAdjSeconds = await timeRepo.getNetAdjustmentSeconds(guild.id, rate.userId, pStartDate, pEndDate);
+        }
+
+        const billableSeconds = Math.max(0, trackedSeconds + netAdjSeconds);
+        const billableHours = billableSeconds / 3600;
+        const hourlyRate = rate.hourlyRateCents / 100;
+        const payoutAmount = Number((billableHours * hourlyRate).toFixed(2));
+
+        contractors.push({
+          userId: rate.userId,
+          username,
+          hourlyRate,
+          currency: rate.currency,
+          trackedSeconds,
+          trackedFormatted: formatDuration(trackedSeconds),
+          adjustmentSeconds: netAdjSeconds,
+          adjustmentFormatted: `${netAdjSeconds >= 0 ? '+' : ''}${formatDuration(Math.abs(netAdjSeconds))}`,
+          billableHours,
+          payoutAmount,
+        });
+      }
+
+      const payrollData: ConsolidatedPayrollReportData = {
+        guildId: guild.id,
+        guildName: guild.name,
+        periodLabel: pActivePreset,
+        timezone: settings.timezone || 'UTC',
+        contractors,
+        generatedAt: new Date(),
+      };
+
+      const totalBillable = contractors.reduce((sum, c) => sum + c.billableHours, 0);
+      const totalPayout = contractors.reduce((sum, c) => sum + c.payoutAmount, 0);
+      const primaryCurrency = contractors[0]?.currency || 'BDT';
+      const timestamp = formatDateIsoInTz(new Date(), settings.timezone || 'UTC');
+
+      if (format === ExportFormat.CSV) {
+        const csvHeaders = [
+          'Contractor Username',
+          'Discord ID',
+          'Hourly Rate',
+          'Currency',
+          'Tracked Time',
+          'Manual Adjustments',
+          'Billable Hours',
+          'Gross Payout',
+        ];
+        const csvRows = contractors.map((c) => [
+          `"${c.username.replace(/"/g, '""')}"`,
+          `"${c.userId}"`,
+          c.hourlyRate.toFixed(2),
+          c.currency,
+          `"${c.trackedFormatted}"`,
+          `"${c.adjustmentFormatted}"`,
+          c.billableHours.toFixed(2),
+          c.payoutAmount.toFixed(2),
+        ]);
+        const csvContent = '\ufeff' + [csvHeaders.join(','), ...csvRows.map((r) => r.join(','))].join('\r\n');
+        const buffer = Buffer.from(csvContent, 'utf-8');
+        const filename = `purrtrack-payroll-${guild.id}-${timestamp}.csv`;
+        const attachment = new AttachmentBuilder(buffer, { name: filename });
+
+        await interaction.editReply({
+          content: `✅ Generated consolidated CSV payroll report for **${guild.name}** (${contractors.length} contractors):`,
+          files: [attachment],
+        });
+        return;
+      }
+
+      if (format === ExportFormat.EMBED) {
+        const embed = new EmbedBuilder()
+          .setTitle(`💼 Master Contractor Payroll Ledger • ${guild.name}`)
+          .setDescription(
+            `Payroll summary for **${pActivePreset}** (${settings.timezone || 'UTC'}).\n` +
+            `Total active contractors: **${contractors.length}**`
+          )
+          .setColor(0x5865f2)
+          .setFooter({ text: 'PurrTrack Payroll System' })
+          .setTimestamp();
+
+        for (const c of contractors.slice(0, 15)) {
+          embed.addFields({
+            name: `@${c.username} (${c.hourlyRate.toFixed(2)} ${c.currency}/h)`,
+            value: `• Tracked: ${c.trackedFormatted}\n• Adj: ${c.adjustmentFormatted}\n• Billable: **${c.billableHours.toFixed(2)}h** ➔ **${c.payoutAmount.toFixed(2)} ${c.currency}**`,
+            inline: true,
+          });
+        }
+
+        embed.addFields({
+          name: '📊 Grand Totals',
+          value: `• Total Billable Hours: **${totalBillable.toFixed(2)}h**\n• Total Gross Payout: **${totalPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryCurrency}**`,
+          inline: false,
+        });
+
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
+      // Default: EXCEL
+      const excelBuffer = await generatePayrollExcelReport(payrollData);
+      const filename = `purrtrack-payroll-${guild.id}-${timestamp}.xlsx`;
+      const attachment = new AttachmentBuilder(excelBuffer, { name: filename });
+
+      const embed = new EmbedBuilder()
+        .setTitle(`💼 Master Contractor Payroll Ledger • ${guild.name}`)
+        .setDescription(
+          `Master payroll spreadsheet for period **${pActivePreset}** (${settings.timezone || 'UTC'}).\n` +
+          `Includes formula-backed payout calculations (\`=ROUND(C*G, 2)\`) and summary totals (\`=SUM(...)\`).`
+        )
+        .addFields(
+          { name: '👥 Contractors', value: `${contractors.length}`, inline: true },
+          { name: '⏱️ Billable Hours', value: `${totalBillable.toFixed(2)}h`, inline: true },
+          {
+            name: '💰 Total Payout',
+            value: `${totalPayout.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${primaryCurrency}`,
+            inline: true,
+          }
+        )
+        .setColor(0x5865f2)
+        .setFooter({ text: 'PurrTrack Payroll System' })
+        .setTimestamp();
+
+      await interaction.editReply({
+        embeds: [embed],
+        files: [attachment],
+      });
+      return;
+    } catch (err) {
+      console.error('Error generating payroll report:', err);
+      await interaction.editReply({
+        content: `❌ An error occurred while generating payroll: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      return;
+    }
+  }
+
+  if (targetUser && targetUser.id !== interaction.user.id && !isManager) {
     await interaction.reply({
-      content: "⛔ You cannot view other members' time reports without admin permissions.",
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -333,8 +595,8 @@ export async function handleReportCommand(
       }
     }
 
-    // Attach contractor billing rate if authorized (Admin/Manager or inspecting self)
-    if (targetUser && ratesRepo && (isAdmin || targetUser.id === interaction.user.id)) {
+    // Attach contractor billing rate if authorized (Management permission or inspecting self)
+    if (targetUser && ratesRepo && (isManager || targetUser.id === interaction.user.id)) {
       const rate = await ratesRepo.getRate(guild.id, targetUser.id);
       if (rate) {
         const hourlyRateFormatted = `${(rate.hourlyRateCents / 100).toFixed(2)} ${rate.currency} / hr`;

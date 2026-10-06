@@ -194,3 +194,160 @@ export async function generateExcelReport(data: AggregatedReportData): Promise<B
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
+
+export interface ContractorPayrollItem {
+  userId: string;
+  username: string;
+  hourlyRate: number;
+  currency: string;
+  trackedSeconds: number;
+  trackedFormatted: string;
+  adjustmentSeconds: number;
+  adjustmentFormatted: string;
+  billableHours: number;
+  payoutAmount: number;
+}
+
+export interface ConsolidatedPayrollReportData {
+  guildId: string;
+  guildName: string;
+  periodLabel: string;
+  timezone: string;
+  contractors: ContractorPayrollItem[];
+  generatedAt?: Date;
+}
+
+/**
+ * Generates an Excel (.xlsx) master payroll workbook with all contractors, billable hours, rates, and formula-backed payouts.
+ */
+export async function generatePayrollExcelReport(data: ConsolidatedPayrollReportData): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'PurrTrack Discord Bot';
+  workbook.created = data.generatedAt || new Date();
+
+  const sheet = workbook.addWorksheet('Payroll Summary', {
+    views: [{ showGridLines: true }],
+  });
+
+  // Banner Row
+  sheet.mergeCells('A1:H1');
+  const banner = sheet.getCell('A1');
+  banner.value = '🐱 PurrTrack • Master Contractor Payroll Ledger';
+  banner.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+  banner.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF5865F2' },
+  };
+  banner.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(1).height = 36;
+
+  // Metadata block
+  sheet.addRow(['Server Name:', data.guildName]);
+  sheet.addRow(['Reporting Period:', `${data.periodLabel} (${data.timezone})`]);
+  sheet.addRow(['Total Contractors:', data.contractors.length]);
+  sheet.addRow(['Generated Date:', (data.generatedAt || new Date()).toLocaleString('en-US')]);
+  sheet.addRow([]);
+
+  // Table Header Row (Row 7)
+  const headers = [
+    'Contractor Name',
+    'Discord ID',
+    'Hourly Rate',
+    'Currency',
+    'Tracked Time',
+    'Manual Adjustments',
+    'Billable Hours',
+    'Gross Payout',
+  ];
+  const headerRow = sheet.addRow(headers);
+  headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF2C2F33' },
+  };
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+  headerRow.height = 26;
+
+  const startDataRow = 8;
+  let currentRow = startDataRow;
+
+  for (const c of data.contractors) {
+    const row = sheet.addRow([
+      `@${c.username}`,
+      c.userId,
+      c.hourlyRate,
+      c.currency,
+      c.trackedFormatted,
+      c.adjustmentFormatted,
+      Number(c.billableHours.toFixed(2)),
+      { formula: `ROUND(C${currentRow}*G${currentRow}, 2)`, result: c.payoutAmount },
+    ]);
+
+    row.height = 22;
+    row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+    row.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell(3).numFmt = '#,##0.00';
+    row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell(7).numFmt = '#,##0.00';
+    row.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell(8).numFmt = '#,##0.00';
+
+    if (currentRow % 2 === 0) {
+      row.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF8F9FA' },
+      };
+    }
+
+    currentRow++;
+  }
+
+  // Summary Row with =SUM formulas
+  if (data.contractors.length > 0) {
+    const lastDataRow = currentRow - 1;
+    const summaryRow = sheet.addRow([
+      'Total Summary',
+      '',
+      '',
+      '',
+      '',
+      '',
+      { formula: `SUM(G${startDataRow}:G${lastDataRow})` },
+      { formula: `SUM(H${startDataRow}:H${lastDataRow})` },
+    ]);
+
+    summaryRow.height = 26;
+    summaryRow.font = { name: 'Calibri', size: 11, bold: true };
+    summaryRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E3FF' },
+    };
+    summaryRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    summaryRow.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+    summaryRow.getCell(7).numFmt = '#,##0.00';
+    summaryRow.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
+    summaryRow.getCell(8).numFmt = '#,##0.00';
+  }
+
+  // Auto-fit columns
+  sheet.columns.forEach((column) => {
+    let maxLen = 14;
+    column.eachCell?.({ includeEmpty: false }, (cell) => {
+      const len = cell.value ? String(cell.value).length : 0;
+      if (len > maxLen) maxLen = len;
+    });
+    column.width = Math.min(maxLen + 4, 38);
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+

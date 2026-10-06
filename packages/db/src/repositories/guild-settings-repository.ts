@@ -29,6 +29,13 @@ export class GuildSettingsRepository {
       timezone: 'UTC',
       ignoredChannelIds: [],
       adminRoleIds: [],
+      lastAnnouncedMonth: null,
+      autoReportConfig: {
+        enabled: false,
+        format: 'excel',
+        includePayroll: true,
+      },
+      lastReportedMonth: null,
     };
 
     const [inserted] = await this.database
@@ -38,6 +45,25 @@ export class GuildSettingsRepository {
       .returning();
 
     return inserted || (await this.database.select().from(guildSettings).where(eq(guildSettings.guildId, guildId)).limit(1))[0];
+  }
+
+  async listAllSettings(): Promise<GuildSetting[]> {
+    return this.database.select().from(guildSettings);
+  }
+
+  async setLastAnnouncedMonth(guildId: string, month: string): Promise<GuildSetting> {
+    return this.updateSettings(guildId, { lastAnnouncedMonth: month });
+  }
+
+  async setLastReportedMonth(guildId: string, month: string): Promise<GuildSetting> {
+    return this.updateSettings(guildId, { lastReportedMonth: month });
+  }
+
+  async setAutoReportConfig(
+    guildId: string,
+    config: NonNullable<NewGuildSetting['autoReportConfig']>
+  ): Promise<GuildSetting> {
+    return this.updateSettings(guildId, { autoReportConfig: config });
   }
 
   async updateSettings(guildId: string, updates: Partial<NewGuildSetting>): Promise<GuildSetting> {
@@ -83,3 +109,4 @@ export class GuildSettingsRepository {
     return this.updateSettings(guildId, { ignoredChannelIds: channels });
   }
 }
+

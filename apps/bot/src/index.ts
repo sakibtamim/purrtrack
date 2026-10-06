@@ -14,6 +14,7 @@ import { VoiceTracker } from './engine/voice-tracker.js';
 import { FocusManager } from './engine/focus-manager.js';
 import { StartupReconciler } from './engine/reconciler.js';
 import { BadgeManager } from './engine/badge-manager.js';
+import { MonthlyCoronationScheduler } from './engine/monthly-scheduler.js';
 import { registerReady } from './events/ready.js';
 import { registerVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerInteractionCreate } from './events/interaction-create.js';
@@ -58,14 +59,25 @@ async function bootstrap(): Promise<void> {
     ],
   });
 
-  // 5. Register Process Signal & Graceful Exit Handlers
+  // 5. Initialize Timezone-Aware Monthly Coronation Watchdog
+  const monthlyScheduler = new MonthlyCoronationScheduler(
+    client,
+    settingsRepo,
+    sessionRepo,
+    badgesRepo,
+    badgeManager
+  );
+
+  // 6. Register Process Signal & Graceful Exit Handlers
   registerGracefulExit(client, async () => {
+    monthlyScheduler.stop();
     voiceTracker.stopInactivityWatchdog();
     await voiceTracker.flushAllPending();
   });
 
-  // 6. Start Inactivity Sleep Guard Watchdog
+  // 7. Start Background Watchdogs
   voiceTracker.startInactivityWatchdog(client, 60000);
+  monthlyScheduler.start();
 
   // 7. Register Gateway Events
   registerReady(client, reconciler);

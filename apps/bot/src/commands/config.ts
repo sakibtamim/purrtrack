@@ -10,6 +10,7 @@ import {
 import { normalizeTimezone, getTimezoneLabel, searchTimezones } from "@purrtrack/shared";
 import { GuildSettingsRepository, ContractorRatesRepository } from '@purrtrack/db';
 import { logger } from '../core/logger.js';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
 
 export const configCommand = new SlashCommandBuilder()
   .setName('config')
@@ -132,6 +133,42 @@ export const configCommand = new SlashCommandBuilder()
           .setRequired(true)
           .setAutocomplete(true)
       )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('auto_report')
+      .setDescription('Configure optional automated monthly server report delivery (Admin/Manager only)')
+      .addBooleanOption((opt) =>
+        opt
+          .setName('enabled')
+          .setDescription('Enable or disable automatic monthly report delivery (default: disabled)')
+          .setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('format')
+          .setDescription('Report format (default: Excel .xlsx)')
+          .setRequired(false)
+          .addChoices(
+            { name: '📊 Excel Spreadsheet (.xlsx)', value: 'excel' },
+            { name: '📑 PDF Document', value: 'pdf' },
+            { name: '📝 CSV File', value: 'csv' },
+            { name: '📄 Discord Embed Only', value: 'embed' }
+          )
+      )
+      .addChannelOption((opt) =>
+        opt
+          .setName('channel')
+          .setDescription('Destination channel (defaults to announcement channel)')
+          .addChannelTypes(ChannelType.GuildText)
+          .setRequired(false)
+      )
+      .addBooleanOption((opt) =>
+        opt
+          .setName('include_payroll')
+          .setDescription('Include consolidated contractor payroll sheet if billing rates configured (default: true)')
+          .setRequired(false)
+      )
   );
 
 export async function handleConfigCommand(
@@ -145,23 +182,17 @@ export async function handleConfigCommand(
     return;
   }
 
-  // Permission verification: Server Owner or Administrator / ManageGuild permission required
+  // Strict RBAC permission verification
   const member = await guild.members.fetch(interaction.user.id);
-  const isOwner = guild.ownerId === interaction.user.id;
-  const isAdmin =
-    isOwner ||
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.permissions.has(PermissionFlagsBits.ManageGuild);
-
   const settings = await settingsRepo.getSettings(guild.id);
-  const isManager = settings.adminRoleIds?.some((rId) => member.roles.cache.has(rId)) ?? false;
+  const isManager = hasManagementPermission(member, guild, settings);
 
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "timezone") {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: "⛔ Only Server Administrators and Management role members can update the server timezone.",
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -186,16 +217,56 @@ export async function handleConfigCommand(
     return;
   }
 
-  if (subcommand === 'view') {
-    if (!isAdmin && !isManager) {
+  if (subcommand === 'auto_report') {
+    if (!isManager) {
       await interaction.reply({
-        content: '⛔ Only Server Administrators and Management role members can view PurrTrack configuration.',
+        content: getManagementDenialMessage(settings),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const enabled = interaction.options.getBoolean('enabled', true);
+    const format = (interaction.options.getString('format') || settings.autoReportConfig?.format || 'excel') as 'excel' | 'pdf' | 'csv' | 'embed';
+    const channel = interaction.options.getChannel('channel');
+    const includePayroll = interaction.options.getBoolean('include_payroll') ?? (settings.autoReportConfig?.includePayroll ?? true);
+
+    const channelId = channel ? channel.id : (settings.autoReportConfig?.channelId || settings.announceChannelId || null);
+
+    const updatedConfig = {
+      enabled,
+      format,
+      channelId,
+      includePayroll,
+    };
+
+    await settingsRepo.setAutoReportConfig(guild.id, updatedConfig);
+
+    if (enabled) {
+      const channelDisplay = channelId ? `<#${channelId}>` : 'configured announcement channel';
+      await interaction.reply({
+        content: `✅ Automated monthly report delivery is now **Enabled**!\n• **Schedule**: 1st of every month at 00:00 (\`${settings.timezone}\`)\n• **Destination**: ${channelDisplay}\n• **Format**: \`${format.toUpperCase()}\`\n• **Consolidated Payroll**: ${includePayroll ? '✅ Included' : '❌ Excluded'}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    } else {
+      await interaction.reply({
+        content: '✅ Automated monthly report delivery is now **Disabled**. Reports will only be generated manually on demand.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    return;
+  }
+
+  if (subcommand === 'view') {
+    if (!isManager) {
+      await interaction.reply({
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     const rolesList = settings.adminRoleIds && settings.adminRoleIds.length > 0
-      ? settings.adminRoleIds.map((rId) => `<@&${rId}>`).join(', ')
+      ? settings.adminRoleIds.map((rId) => `<@&${rId}>`).join(', ') + ' *(Strict Exclusivity)*'
       : '*None configured (Server Owner & Discord Administrators only)*';
 
     const ignoredList = settings.ignoredChannelIds && settings.ignoredChannelIds.length > 0
@@ -235,6 +306,13 @@ export async function handleConfigCommand(
           inline: true,
         },
         {
+          name: '📬 Automated Monthly Report',
+          value: settings.autoReportConfig?.enabled
+            ? `✅ Enabled (\`${settings.autoReportConfig.format?.toUpperCase() || 'EXCEL'}\` to <#${settings.autoReportConfig.channelId || settings.announceChannelId}>)`
+            : '❌ Disabled (Manual reports only)',
+          inline: true,
+        },
+        {
           name: '🔇 Ignored Channels',
           value: ignoredList,
           inline: false,
@@ -261,9 +339,9 @@ export async function handleConfigCommand(
 
     const targetUser = interaction.options.getUser('target') || interaction.user;
 
-    if (targetUser.id !== interaction.user.id && !isAdmin && !isManager) {
+    if (targetUser.id !== interaction.user.id && !isManager) {
       await interaction.reply({
-        content: "⛔ You can only view your own configured billing rate. Inspecting other members' rates requires Admin permissions.",
+        content: "⛔ You can only view your own configured billing rate. Inspecting other members' rates requires Management permissions.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -297,9 +375,9 @@ export async function handleConfigCommand(
 
   // Rate Set: Admin / Manager only
   if (subcommand === 'rate_set') {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: '⛔ Only Server Administrators and Management role members can set contractor rates.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -326,9 +404,9 @@ export async function handleConfigCommand(
 
   // Rate Remove: Admin / Manager only
   if (subcommand === 'rate_remove') {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: '⛔ Only Server Administrators and Management role members can remove contractor rates.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -356,10 +434,10 @@ export async function handleConfigCommand(
     return;
   }
 
-  // Modifying settings requires Server Owner or Discord Administrator / Manage Server
-  if (!isAdmin) {
+  // Modifying settings requires Management permission (Strict role exclusivity or Owner/Admin fallback)
+  if (!isManager) {
     await interaction.reply({
-      content: '⛔ Only Server Administrators and the Server Owner can modify PurrTrack settings or assign management roles.',
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;

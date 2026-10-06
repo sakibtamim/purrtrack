@@ -7,6 +7,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
+  ChannelType,
 } from 'discord.js';
 import {
   VoiceSessionRepository,
@@ -21,39 +22,58 @@ import {
   formatDuration,
   renderBadgePill,
 } from '@purrtrack/shared';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
+import { buildMonthlyCoronationEmbed, getConcludedMonthInfo } from '../engine/monthly-scheduler.js';
 
 const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
 
 export const leaderboardCommand = new SlashCommandBuilder()
   .setName('leaderboard')
   .setDescription('🏆 Server voice leaderboards with podium highlights & streak rankings')
-  .addStringOption((opt) =>
-    opt
-      .setName('period')
-      .setDescription('Timeframe for the leaderboard (default: This Month)')
-      .setRequired(false)
-      .addChoices(
-        { name: '🗓️ This Month (Championship)', value: 'this_month' },
-        { name: '📅 This Week', value: 'this_week' },
-        { name: '👑 All Time', value: 'all_time' }
+  .addSubcommand((sub) =>
+    sub
+      .setName('view')
+      .setDescription('View server voice leaderboards or streak rankings')
+      .addStringOption((opt) =>
+        opt
+          .setName('period')
+          .setDescription('Timeframe for the leaderboard (default: This Month)')
+          .setRequired(false)
+          .addChoices(
+            { name: '🗓️ This Month (Championship)', value: 'this_month' },
+            { name: '📅 This Week', value: 'this_week' },
+            { name: '👑 All Time', value: 'all_time' }
+          )
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('metric')
+          .setDescription('Leaderboard metric (Voice Hours or Daily Streaks)')
+          .setRequired(false)
+          .addChoices(
+            { name: '🎙️ Voice Hours', value: 'voice' },
+            { name: '🔥 Daily Streaks', value: 'streak' }
+          )
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('page')
+          .setDescription('Page number (default: 1)')
+          .setMinValue(1)
+          .setRequired(false)
       )
   )
-  .addStringOption((opt) =>
-    opt
-      .setName('metric')
-      .setDescription('Leaderboard metric (Voice Hours or Daily Streaks)')
-      .setRequired(false)
-      .addChoices(
-        { name: '🎙️ Voice Hours', value: 'voice' },
-        { name: '🔥 Daily Streaks', value: 'streak' }
+  .addSubcommand((sub) =>
+    sub
+      .setName('announce')
+      .setDescription('Broadcast the Monthly Hall of Fame coronation ceremony (Admin/Manager only)')
+      .addChannelOption((opt) =>
+        opt
+          .setName('channel')
+          .setDescription('Target channel to broadcast the Hall of Fame (defaults to announcement channel)')
+          .addChannelTypes(ChannelType.GuildText)
+          .setRequired(false)
       )
-  )
-  .addIntegerOption((opt) =>
-    opt
-      .setName('page')
-      .setDescription('Page number (default: 1)')
-      .setMinValue(1)
-      .setRequired(false)
   );
 
 export async function buildLeaderboardEmbed(params: {
@@ -246,16 +266,80 @@ export async function handleLeaderboardCommand(
     return;
   }
 
-  // Check and award Monthly Champions for completed month
+  let subcommand = 'view';
+  try {
+    subcommand = interaction.options.getSubcommand();
+  } catch {
+    subcommand = 'view';
+  }
+
+  const settings = settingsRepo ? await settingsRepo.getSettings(guildId) : null;
+  const timezone = settings?.timezone || 'UTC';
+
+  if (subcommand === 'announce') {
+    const member = await guild.members.fetch(user.id);
+    const isManager = hasManagementPermission(member, guild, settings);
+
+    if (!isManager) {
+      await interaction.reply({
+        content: getManagementDenialMessage(settings),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const targetChannelOption = interaction.options.getChannel('channel');
+    const targetChannel =
+      targetChannelOption ||
+      (settings?.announceChannelId
+        ? guild.channels.cache.get(settings.announceChannelId) ||
+          (await guild.channels.fetch(settings.announceChannelId).catch(() => null))
+        : null) ||
+      interaction.channel;
+
+    if (!targetChannel || !('send' in targetChannel)) {
+      await interaction.editReply({
+        content: '❌ No valid announcement channel found. Please configure one via `/config set announce_channel:#channel` or specify one in the `channel` option.',
+      });
+      return;
+    }
+
+    const monthInfo = getConcludedMonthInfo(new Date(), timezone);
+
+    const { awarded, report } = badgeManager
+      ? await badgeManager.evaluateMonthlyChampions(guildId, guild.name, timezone)
+      : { awarded: [], report: null };
+
+    const embed = buildMonthlyCoronationEmbed({
+      guildName: guild.name,
+      monthLabel: monthInfo.monthLabel,
+      timezone,
+      champions: awarded,
+      report,
+    });
+
+    await targetChannel.send({ embeds: [embed] });
+
+    if (settingsRepo) {
+      await settingsRepo.setLastAnnouncedMonth(guildId, monthInfo.prevMonthKey);
+    }
+
+    await interaction.editReply({
+      content: `✅ Successfully broadcasted the **${monthInfo.monthLabel}** Monthly Hall of Fame coronation to <#${targetChannel.id}>!`,
+    });
+    return;
+  }
+
+  // Subcommand: view
   if (badgeManager) {
-    await badgeManager.evaluateMonthlyChampions(guildId, guild.name).catch(() => {});
+    await badgeManager.evaluateMonthlyChampions(guildId, guild.name, timezone).catch(() => {});
   }
 
   const period = (interaction.options.getString('period') || 'this_month') as 'this_week' | 'this_month' | 'all_time';
   const metric = (interaction.options.getString('metric') || 'voice') as 'voice' | 'streak';
   const page = interaction.options.getInteger('page') || 1;
-  const settings = settingsRepo ? await settingsRepo.getSettings(guildId) : null;
-  const timezone = settings?.timezone || 'UTC';
 
   await interaction.deferReply();
 

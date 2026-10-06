@@ -81,6 +81,35 @@ describe('PostgreSQL Repositories Integration Suite', () => {
     expect(finalized!.durationSeconds).toBeGreaterThanOrEqual(0);
   });
 
+  it('VoiceSession: applies policy duration slicing and accumulates segment metrics into metadata', async () => {
+    const policyUserId = `policy_user_${Date.now()}`;
+    await sessionRepo.upsertUser(policyUserId, 'policy_user', 'Policy User');
+    const start = await sessionRepo.startSession({
+      guildId: testGuildId,
+      userId: policyUserId,
+      channelId: testChannel1,
+      channelName: 'Lounge',
+      wasDeafened: true,
+    });
+
+    const startedAt = new Date(start.session.startedAt);
+    const endedAt = new Date(startedAt.getTime() + 100000); // 100s later
+
+    const finalized = await sessionRepo.endSession({
+      sessionId: start.session.id,
+      endedAt,
+      policy: {
+        trackDeafened: false,
+      },
+    });
+
+    expect(finalized).toBeDefined();
+    expect(finalized!.metadata).toBeDefined();
+    expect(finalized!.metadata!.deafenedSeconds).toBe(100);
+    // 100s total minus 100s deafened = 0s
+    expect(finalized!.durationSeconds).toBe(0);
+  });
+
   it('Startup Reconciler: heals abandoned active sessions', async () => {
     // Start an abandoned session
     const abandoned = await sessionRepo.startSession({

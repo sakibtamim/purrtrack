@@ -18,6 +18,7 @@ export const voiceSessions = pgTable(
         mutedSeconds: number;
         deafenedSeconds: number;
         streamingSeconds: number;
+        cameraSeconds?: number;
         channelSwitches: number;
       }>()
       .default({ mutedSeconds: 0, deafenedSeconds: 0, streamingSeconds: 0, channelSwitches: 0 }),

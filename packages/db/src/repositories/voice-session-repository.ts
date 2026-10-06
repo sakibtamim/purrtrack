@@ -41,11 +41,16 @@ export interface TransitionStateParams {
 export interface EndSessionParams {
   sessionId: string;
   endedAt?: Date;
-  metadata?: {
+  metadata?: Partial<{
     mutedSeconds: number;
     deafenedSeconds: number;
     streamingSeconds: number;
+    cameraSeconds?: number;
     channelSwitches: number;
+  }>;
+  policy?: {
+    trackDeafened?: boolean;
+    trackMuted?: boolean;
   };
 }
 
@@ -365,18 +370,57 @@ export class VoiceSessionRepository {
           .where(eq(sessionSegments.id, openSegment.id));
       }
 
-      const totalDuration = Math.max(
+      // Query all segments to calculate accumulated metrics and apply policy slicing
+      const allSegments = await tx
+        .select()
+        .from(sessionSegments)
+        .where(eq(sessionSegments.sessionId, params.sessionId));
+
+      let mutedSeconds = 0;
+      let deafenedSeconds = 0;
+      let streamingSeconds = 0;
+      let cameraSeconds = 0;
+
+      for (const seg of allSegments) {
+        const dur = seg.durationSeconds || 0;
+        if (seg.wasMuted) mutedSeconds += dur;
+        if (seg.wasDeafened) deafenedSeconds += dur;
+        if (seg.wasStreaming) streamingSeconds += dur;
+        if (seg.wasVideo) cameraSeconds += dur;
+      }
+
+      const rawDuration = Math.max(
         0,
         Math.floor((endedAt.getTime() - new Date(session.startedAt).getTime()) / 1000)
       );
+
+      let effectiveDuration = rawDuration;
+      if (params.policy?.trackDeafened === false) {
+        effectiveDuration -= deafenedSeconds;
+      }
+      if (params.policy?.trackMuted === false) {
+        effectiveDuration -= mutedSeconds;
+      }
+      effectiveDuration = Math.max(0, effectiveDuration);
+
+      const existingMeta = (session.metadata && typeof session.metadata === 'object' ? session.metadata : {}) as any;
+      const metadata = {
+        ...existingMeta,
+        ...(params.metadata || {}),
+        mutedSeconds,
+        deafenedSeconds,
+        streamingSeconds,
+        cameraSeconds,
+        channelSwitches: existingMeta.channelSwitches || 0,
+      };
 
       const [updatedSession] = await tx
         .update(voiceSessions)
         .set({
           endedAt,
-          durationSeconds: totalDuration,
+          durationSeconds: effectiveDuration,
           status: SessionStatus.COMPLETED,
-          metadata: params.metadata || session.metadata,
+          metadata,
           updatedAt: new Date(),
         })
         .where(eq(voiceSessions.id, params.sessionId))

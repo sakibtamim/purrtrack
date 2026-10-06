@@ -182,9 +182,14 @@ export class VoiceTracker {
     const timeoutId = setTimeout(async () => {
       this.pendingLeaves.delete(key);
       try {
+        const settings = await this.settingsRepo.getSettings(guildId);
         const finalized = await this.sessionRepo.endSession({
           sessionId: active.id,
           endedAt: leaveTime,
+          policy: {
+            trackDeafened: settings.trackDeafened,
+            trackMuted: settings.trackMuted,
+          },
         });
 
         if (finalized) {
@@ -196,7 +201,12 @@ export class VoiceTracker {
           }
 
           if (this.badgeManager && (finalized.durationSeconds ?? 0) >= 30) {
-            await this.badgeManager.evaluateAndUnlock({ guildId, userId }).catch(() => {});
+            await this.badgeManager.evaluateAndUnlock({
+              guildId,
+              userId,
+              channelId: settings.announceChannelId,
+              client: guild?.client,
+            }).catch(() => {});
           }
         }
       } catch (err) {
@@ -314,9 +324,14 @@ export class VoiceTracker {
     for (const [key, pending] of this.pendingLeaves.entries()) {
       clearTimeout(pending.timeoutId);
       try {
+        const settings = await this.settingsRepo.getSettings(pending.guildId);
         const finalized = await this.sessionRepo.endSession({
           sessionId: pending.sessionId,
           endedAt: pending.leaveTime,
+          policy: {
+            trackDeafened: settings.trackDeafened,
+            trackMuted: settings.trackMuted,
+          },
         });
         if (finalized && this.userGoalsRepo && (finalized.durationSeconds ?? 0) >= 30) {
           await this.userGoalsRepo.recordActivityAndStreak(pending.guildId, pending.userId, pending.leaveTime).catch(() => {});
@@ -411,6 +426,10 @@ export class VoiceTracker {
               await this.sessionRepo.endSession({
                 sessionId: active.id,
                 endedAt: new Date(),
+                policy: {
+                  trackDeafened: settings.trackDeafened,
+                  trackMuted: settings.trackMuted,
+                },
               });
               this.lastActiveMap.delete(key);
             }

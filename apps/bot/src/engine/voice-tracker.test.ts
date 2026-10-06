@@ -284,4 +284,55 @@ describe('VoiceTracker Engine & Anti-Flap Protection', () => {
     expect(mockDisconnect).toHaveBeenCalled();
     expect(mockSessionRepo.endSession).toHaveBeenCalled();
   });
+
+  it('passes guild tracking policy and announceChannelId to endSession and badgeManager', async () => {
+    const mockBadgeManager = {
+      evaluateAndUnlock: vi.fn().mockResolvedValue(['voice_10h']),
+    };
+
+    mockSettingsRepo.getSettings.mockResolvedValue({
+      trackingEnabled: true,
+      trackDeafened: false,
+      trackMuted: true,
+      announceChannelId: 'chan-announcements',
+    });
+
+    const customTracker = new VoiceTracker(
+      mockSessionRepo,
+      mockSettingsRepo,
+      5,
+      undefined,
+      mockBadgeManager
+    );
+
+    const member = { user: { bot: false, id: 'user-p', username: 'tester', displayAvatarURL: () => '' } };
+    const guild = { id: 'g-policy', afkChannelId: null, client: { isFakeClient: true } };
+
+    // Disconnect
+    const disconnectOld = { channelId: 'vc-1', channel: { id: 'vc-1', name: 'General' }, member, guild };
+    const disconnectNew = { channelId: null, channel: null, member, guild };
+
+    await customTracker.handleVoiceStateUpdate(disconnectOld as any, disconnectNew as any);
+
+    // Fast-forward past grace window (5s)
+    await vi.advanceTimersByTimeAsync(6000);
+
+    expect(mockSessionRepo.endSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policy: {
+          trackDeafened: false,
+          trackMuted: true,
+        },
+      })
+    );
+
+    expect(mockBadgeManager.evaluateAndUnlock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        guildId: 'g-policy',
+        userId: 'user-p',
+        channelId: 'chan-announcements',
+      })
+    );
+  });
 });
+

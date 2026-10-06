@@ -94,7 +94,9 @@ export class BadgeManager {
         // Optional celebration message in channel
         if (channelId && client) {
           try {
-            const channel = client.channels.cache.get(channelId);
+            const channel =
+              client.channels.cache.get(channelId) ||
+              (await client.channels.fetch(channelId).catch(() => null));
             if (channel?.isTextBased() && 'send' in channel) {
               const pills = newlyUnlocked
                 .map((id) => renderBadgePill(id))

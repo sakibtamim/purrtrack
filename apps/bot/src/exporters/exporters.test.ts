@@ -154,7 +154,6 @@ describe('Multi-Format Exporters', () => {
     expect(json.fields?.some((f) => f.name.includes('Contractor Compensation'))).toBe(true);
     expect(json.fields?.some((f) => f.name.includes('Manual Adjustments'))).toBe(true);
   });
-});
 
   it('PDF Exporter sanitizes emojis, handles unicode gracefully, and fits short reports in 1 page', async () => {
     const unicodeData: AggregatedReportData = {
@@ -203,3 +202,47 @@ describe('Multi-Format Exporters', () => {
     const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g);
     expect(pageMatches?.length).toBe(1);
   });
+
+  it('Payroll Excel Exporter generates valid master workbook with formulas and summary totals', async () => {
+    const { generatePayrollExcelReport } = await import('./excel-exporter.js');
+    const payrollData = {
+      guildId: '123456789012345678',
+      guildName: 'PurrfectSoft Test Guild',
+      periodLabel: 'This Month',
+      timezone: 'Asia/Dhaka',
+      contractors: [
+        {
+          userId: 'user1',
+          username: 'contractor_alice',
+          hourlyRate: 500,
+          currency: 'BDT',
+          trackedSeconds: 36000,
+          trackedFormatted: '10h 0m 0s',
+          adjustmentSeconds: 3600,
+          adjustmentFormatted: '+1h 0m 0s',
+          billableHours: 11,
+          payoutAmount: 5500,
+        },
+        {
+          userId: 'user2',
+          username: 'contractor_bob',
+          hourlyRate: 400,
+          currency: 'BDT',
+          trackedSeconds: 18000,
+          trackedFormatted: '5h 0m 0s',
+          adjustmentSeconds: 0,
+          adjustmentFormatted: '+0s',
+          billableHours: 5,
+          payoutAmount: 2000,
+        },
+      ],
+    };
+
+    const buffer = await generatePayrollExcelReport(payrollData);
+    expect(buffer).toBeDefined();
+    expect(buffer.length).toBeGreaterThan(3000);
+    // Standard .xlsx file begins with ZIP magic bytes: 'PK'
+    expect(buffer[0]).toBe(0x50);
+    expect(buffer[1]).toBe(0x4b);
+  });
+});

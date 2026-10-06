@@ -23,12 +23,8 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
         value: 'Inspect your active voice session, current channel, and live elapsed duration in real time.',
       },
       {
-        name: '📊 `/report user <target> [format] [range]`',
-        value: 'Export individual member timesheets in **Excel (.xlsx)**, **PDF**, **CSV**, **JSON**, or interactive **Discord Embed**.',
-      },
-      {
-        name: '📈 `/report guild [format] [range]`',
-        value: 'Admin tool to pull server-wide time tracking statistics, top voice channels, and team contributors.',
+        name: '📊 `/report user` • `/report guild` • `/report payroll`',
+        value: 'Export member timesheets, server activity, or master contractor payroll ledgers in **Excel (.xlsx with live formulas)**, **PDF**, **CSV**, or **Embed**.',
       },
       {
         name: '🎯 `/goal view` • `/goal set` • `/goal reset`',
@@ -40,19 +36,19 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
       },
       {
         name: '👤 `/profile view` • `/profile badges` • `/profile equip` • `/profile unequip`',
-        value: 'View your profile card, inspect 26 achievement badges across 6 categories, and equip a 3-badge showcase (Slot 1 Title, Slots 2-3 Trophy Rack).',
+        value: 'View your profile card, inspect achievement badges across 6 categories, and equip a 3-badge showcase (Slot 1 Title, Slots 2-3 Trophy Rack).',
       },
       {
-        name: '🏆 `/leaderboard [period] [metric] [page]`',
-        value: 'Interactive server leaderboard with Top 3 podiums (🥇🥈🥉), equipped titles, and button navigation (◀️ Prev, Next ▶️, 🎯 My Rank).',
+        name: '🏆 `/leaderboard` • `/leaderboard announce`',
+        value: 'Interactive server leaderboard with Top 3 podiums (🥇🥈🥉), equipped titles, and manual or midnight automated Hall of Fame championship coronation.',
       },
       {
-        name: '⏱️ `/time add` • `/time subtract` • `/time history` (Admins & Managers)',
+        name: '⏱️ `/time add` • `/time subtract` • `/time history` (Managers)',
         value: 'Execute manual voice time adjustments with transparent business reasons, and inspect complete member audit histories.',
       },
       {
-        name: '⚙️ `/config` (Server Admins & Managers)',
-        value: 'Configure tracking rules, set contractor billing rates (`/config rate_set`), configure AFK sleep guard, designate management roles, or manage ignored channels.',
+        name: '⚙️ `/config` (Managers)',
+        value: 'Configure tracking rules, set contractor billing rates (`/config set_rate`), configure midnight automated reports (`/config auto_report`), designate management roles, or manage ignored channels.',
       }
     )
     .setFooter({ text: `PurrTrack v${APP_VERSION} • Enterprise Voice Time Tracking` })

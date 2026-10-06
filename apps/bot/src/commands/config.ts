@@ -10,6 +10,7 @@ import {
 import { normalizeTimezone, getTimezoneLabel, searchTimezones } from "@purrtrack/shared";
 import { GuildSettingsRepository, ContractorRatesRepository } from '@purrtrack/db';
 import { logger } from '../core/logger.js';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
 
 export const configCommand = new SlashCommandBuilder()
   .setName('config')
@@ -145,23 +146,17 @@ export async function handleConfigCommand(
     return;
   }
 
-  // Permission verification: Server Owner or Administrator / ManageGuild permission required
+  // Strict RBAC permission verification
   const member = await guild.members.fetch(interaction.user.id);
-  const isOwner = guild.ownerId === interaction.user.id;
-  const isAdmin =
-    isOwner ||
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.permissions.has(PermissionFlagsBits.ManageGuild);
-
   const settings = await settingsRepo.getSettings(guild.id);
-  const isManager = settings.adminRoleIds?.some((rId) => member.roles.cache.has(rId)) ?? false;
+  const isManager = hasManagementPermission(member, guild, settings);
 
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "timezone") {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: "⛔ Only Server Administrators and Management role members can update the server timezone.",
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -187,15 +182,15 @@ export async function handleConfigCommand(
   }
 
   if (subcommand === 'view') {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: '⛔ Only Server Administrators and Management role members can view PurrTrack configuration.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     const rolesList = settings.adminRoleIds && settings.adminRoleIds.length > 0
-      ? settings.adminRoleIds.map((rId) => `<@&${rId}>`).join(', ')
+      ? settings.adminRoleIds.map((rId) => `<@&${rId}>`).join(', ') + ' *(Strict Exclusivity)*'
       : '*None configured (Server Owner & Discord Administrators only)*';
 
     const ignoredList = settings.ignoredChannelIds && settings.ignoredChannelIds.length > 0
@@ -261,9 +256,9 @@ export async function handleConfigCommand(
 
     const targetUser = interaction.options.getUser('target') || interaction.user;
 
-    if (targetUser.id !== interaction.user.id && !isAdmin && !isManager) {
+    if (targetUser.id !== interaction.user.id && !isManager) {
       await interaction.reply({
-        content: "⛔ You can only view your own configured billing rate. Inspecting other members' rates requires Admin permissions.",
+        content: "⛔ You can only view your own configured billing rate. Inspecting other members' rates requires Management permissions.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -297,9 +292,9 @@ export async function handleConfigCommand(
 
   // Rate Set: Admin / Manager only
   if (subcommand === 'rate_set') {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: '⛔ Only Server Administrators and Management role members can set contractor rates.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -326,9 +321,9 @@ export async function handleConfigCommand(
 
   // Rate Remove: Admin / Manager only
   if (subcommand === 'rate_remove') {
-    if (!isAdmin && !isManager) {
+    if (!isManager) {
       await interaction.reply({
-        content: '⛔ Only Server Administrators and Management role members can remove contractor rates.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -356,10 +351,10 @@ export async function handleConfigCommand(
     return;
   }
 
-  // Modifying settings requires Server Owner or Discord Administrator / Manage Server
-  if (!isAdmin) {
+  // Modifying settings requires Management permission (Strict role exclusivity or Owner/Admin fallback)
+  if (!isManager) {
     await interaction.reply({
-      content: '⛔ Only Server Administrators and the Server Owner can modify PurrTrack settings or assign management roles.',
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;

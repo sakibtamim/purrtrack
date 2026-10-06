@@ -1,12 +1,12 @@
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
-  PermissionFlagsBits,
   EmbedBuilder,
   MessageFlags,
 } from 'discord.js';
 import { GuildSettingsRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
 import { formatDuration } from '@purrtrack/shared';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
 
 export const timeCommand = new SlashCommandBuilder()
   .setName('time')
@@ -159,18 +159,14 @@ export async function handleTimeCommand(
     return;
   }
 
-  // Permission check: STRICTLY Admin or Management role only
+  // Strict RBAC permission verification
   const member = await guild.members.fetch(user.id);
   const settings = await settingsRepo.getSettings(guild.id);
-  const isAdmin =
-    guild.ownerId === user.id ||
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.permissions.has(PermissionFlagsBits.ManageGuild) ||
-    (settings.adminRoleIds && settings.adminRoleIds.some((rId) => member.roles.cache.has(rId)));
+  const isManager = hasManagementPermission(member, guild, settings);
 
-  if (!isAdmin) {
+  if (!isManager) {
     await interaction.reply({
-      content: '⛔ Only Server Administrators and Management role members can execute manual time adjustments or view audit trails.',
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;

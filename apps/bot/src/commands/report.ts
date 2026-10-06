@@ -1,12 +1,12 @@
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
-  PermissionFlagsBits,
   MessageFlags,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository, ContractorRatesRepository, TimeAdjustmentsRepository } from '@purrtrack/db';
 import { ExportFormat, TimeRangePreset, resolveTimeRange, formatDuration, zonedDateToUtc, getZonedDateParts } from '@purrtrack/shared';
 import { exportReport } from '../exporters/index.js';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
 
 
 
@@ -215,13 +215,10 @@ export async function handleReportCommand(
     return;
   }
 
-  // Check Admin / Manager authorization
+  // Strict RBAC permission verification
   const member = await guild.members.fetch(interaction.user.id);
   const settings = await settingsRepo.getSettings(guild.id);
-  const isAdmin =
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.permissions.has(PermissionFlagsBits.ManageGuild) ||
-    (settings.adminRoleIds && member.roles.cache.some((r) => settings.adminRoleIds?.includes(r.id)));
+  const isManager = hasManagementPermission(member, guild, settings);
 
   const subcommand = interaction.options.getSubcommand();
   const format = (interaction.options.getString('format') as ExportFormat) || ExportFormat.EMBED;
@@ -231,18 +228,18 @@ export async function handleReportCommand(
 
   const targetUser = subcommand === 'user' ? interaction.options.getUser('target') : undefined;
 
-  // Regular members can only view their own user report; Guild-wide reports require Admin/Manager
-  if (subcommand === 'guild' && !isAdmin) {
+  // Regular members can only view their own user report; Guild-wide reports require Management permission
+  if (subcommand === 'guild' && !isManager) {
     await interaction.reply({
-      content: '⛔ Server-wide reports are restricted to administrators and managers.',
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  if (targetUser && targetUser.id !== interaction.user.id && !isAdmin) {
+  if (targetUser && targetUser.id !== interaction.user.id && !isManager) {
     await interaction.reply({
-      content: "⛔ You cannot view other members' time reports without admin permissions.",
+      content: getManagementDenialMessage(settings),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -333,8 +330,8 @@ export async function handleReportCommand(
       }
     }
 
-    // Attach contractor billing rate if authorized (Admin/Manager or inspecting self)
-    if (targetUser && ratesRepo && (isAdmin || targetUser.id === interaction.user.id)) {
+    // Attach contractor billing rate if authorized (Management permission or inspecting self)
+    if (targetUser && ratesRepo && (isManager || targetUser.id === interaction.user.id)) {
       const rate = await ratesRepo.getRate(guild.id, targetUser.id);
       if (rate) {
         const hourlyRateFormatted = `${(rate.hourlyRateCents / 100).toFixed(2)} ${rate.currency} / hr`;

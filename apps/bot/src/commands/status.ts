@@ -6,13 +6,13 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  PermissionFlagsBits,
   User,
   Guild,
   MessageFlags,
 } from 'discord.js';
 import { VoiceSessionRepository, GuildSettingsRepository, UserGoalsRepository } from '@purrtrack/db';
 import { formatDuration, renderBadgePill } from '@purrtrack/shared';
+import { hasManagementPermission, getManagementDenialMessage } from '../utils/permissions.js';
 
 export const statusCommand = new SlashCommandBuilder()
   .setName('status')
@@ -209,16 +209,11 @@ export async function handleStatusCommand(
   if (!isSelf) {
     const member = await guild.members.fetch(interaction.user.id);
     const settings = settingsRepo ? await settingsRepo.getSettings(guild.id) : null;
-    const isOwner = guild.ownerId === interaction.user.id;
-    const isManager =
-      isOwner ||
-      member.permissions.has(PermissionFlagsBits.Administrator) ||
-      member.permissions.has(PermissionFlagsBits.ManageGuild) ||
-      Boolean(settings?.adminRoleIds && member.roles.cache.some((r) => settings.adminRoleIds?.includes(r.id)));
+    const isManager = hasManagementPermission(member, guild, settings);
 
     if (!isManager) {
       await interaction.reply({
-        content: '⛔ You can only view your own status. Inspecting other team members requires a Management or Administrator role.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -250,16 +245,11 @@ export async function handleStatusRefreshButton(
   if (!isSelf) {
     const member = await guild.members.fetch(interaction.user.id).catch(() => null);
     const settings = settingsRepo ? await settingsRepo.getSettings(guild.id) : null;
-    const isOwner = guild.ownerId === interaction.user.id;
-    const isManager =
-      isOwner ||
-      Boolean(member?.permissions.has(PermissionFlagsBits.Administrator)) ||
-      Boolean(member?.permissions.has(PermissionFlagsBits.ManageGuild)) ||
-      Boolean(settings?.adminRoleIds && member?.roles.cache.some((r) => settings.adminRoleIds?.includes(r.id)));
+    const isManager = hasManagementPermission(member, guild, settings);
 
     if (!isManager) {
       await interaction.reply({
-        content: '⛔ You do not have permission to inspect or refresh another member’s status.',
+        content: getManagementDenialMessage(settings),
         flags: MessageFlags.Ephemeral,
       });
       return;

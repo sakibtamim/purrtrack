@@ -1,5 +1,12 @@
 import { pgTable, varchar, boolean, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
 
+export interface AutoReportConfig {
+  enabled: boolean;
+  channelId?: string | null;
+  format?: 'excel' | 'pdf' | 'csv' | 'embed';
+  includePayroll?: boolean;
+}
+
 export const guildSettings = pgTable('guild_settings', {
   guildId: varchar('guild_id', { length: 32 }).primaryKey(),
   trackingEnabled: boolean('tracking_enabled').notNull().default(true),
@@ -14,9 +21,17 @@ export const guildSettings = pgTable('guild_settings', {
   ignoredChannelIds: jsonb('ignored_channel_ids').$type<string[]>().default([]),
   adminRoleIds: jsonb('admin_role_ids').$type<string[]>().default([]),
   announceChannelId: varchar('announce_channel_id', { length: 32 }),
+  lastAnnouncedMonth: varchar('last_announced_month', { length: 20 }),
+  autoReportConfig: jsonb('auto_report_config').$type<AutoReportConfig>().default({
+    enabled: false,
+    format: 'excel',
+    includePayroll: true,
+  }),
+  lastReportedMonth: varchar('last_reported_month', { length: 20 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type GuildSetting = typeof guildSettings.$inferSelect;
 export type NewGuildSetting = typeof guildSettings.$inferInsert;
+

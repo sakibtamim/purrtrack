@@ -127,10 +127,21 @@ export class BadgeManager {
    */
   async evaluateMonthlyChampions(
     guildId: string,
-    guildName: string = 'Server'
-  ): Promise<{ userId: string; badgeId: string; rank: number }[]> {
+    guildName: string = 'Server',
+    timezone: string = 'UTC',
+    customRange?: { startDate: Date; endDate: Date }
+  ): Promise<{
+    awarded: { userId: string; username: string; badgeId: string; rank: number; durationSeconds: number }[];
+    report: any;
+  }> {
     try {
-      const { startDate, endDate } = resolveTimeRange(TimeRangePreset.LAST_MONTH);
+      const { startDate, endDate } = customRange || resolveTimeRange(
+        TimeRangePreset.LAST_MONTH,
+        undefined,
+        undefined,
+        'monday',
+        timezone
+      );
       const report = await this.sessionRepo.getAggregatedReport({
         guildId,
         guildName,
@@ -140,15 +151,13 @@ export class BadgeManager {
       });
 
       const topUsers = report.topUsers || [];
-      if (topUsers.length === 0) return [];
-
       const championBadges = [
         'monthly_champion_1st',
         'monthly_champion_2nd',
         'monthly_champion_3rd',
       ];
 
-      const awarded: { userId: string; badgeId: string; rank: number }[] = [];
+      const awarded: { userId: string; username: string; badgeId: string; rank: number; durationSeconds: number }[] = [];
 
       for (let i = 0; i < Math.min(3, topUsers.length); i++) {
         const u = topUsers[i];
@@ -156,17 +165,23 @@ export class BadgeManager {
         const badgeId = championBadges[i];
         const unlocked = await this.badgesRepo.unlockBadge(guildId, u.userId, badgeId);
         if (unlocked) {
-          awarded.push({ userId: u.userId, badgeId, rank: i + 1 });
           logger.info(
             `🏆 [badges] Awarded ${badgeId} to Monthly Champion (Rank #${i + 1}) @${u.username} (${u.userId}) in guild ${guildId}`
           );
         }
+        awarded.push({
+          userId: u.userId,
+          username: u.username,
+          badgeId,
+          rank: i + 1,
+          durationSeconds: u.durationSeconds,
+        });
       }
 
-      return awarded;
+      return { awarded, report };
     } catch (error) {
       logger.error(`Error evaluating monthly champions for guild ${guildId}: ${String(error)}`);
-      return [];
+      return { awarded: [], report: null };
     }
   }
 }

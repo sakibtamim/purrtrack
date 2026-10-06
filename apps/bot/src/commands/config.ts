@@ -133,6 +133,42 @@ export const configCommand = new SlashCommandBuilder()
           .setRequired(true)
           .setAutocomplete(true)
       )
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('auto_report')
+      .setDescription('Configure optional automated monthly server report delivery (Admin/Manager only)')
+      .addBooleanOption((opt) =>
+        opt
+          .setName('enabled')
+          .setDescription('Enable or disable automatic monthly report delivery (default: disabled)')
+          .setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('format')
+          .setDescription('Report format (default: Excel .xlsx)')
+          .setRequired(false)
+          .addChoices(
+            { name: '📊 Excel Spreadsheet (.xlsx)', value: 'excel' },
+            { name: '📑 PDF Document', value: 'pdf' },
+            { name: '📝 CSV File', value: 'csv' },
+            { name: '📄 Discord Embed Only', value: 'embed' }
+          )
+      )
+      .addChannelOption((opt) =>
+        opt
+          .setName('channel')
+          .setDescription('Destination channel (defaults to announcement channel)')
+          .addChannelTypes(ChannelType.GuildText)
+          .setRequired(false)
+      )
+      .addBooleanOption((opt) =>
+        opt
+          .setName('include_payroll')
+          .setDescription('Include consolidated contractor payroll sheet if billing rates configured (default: true)')
+          .setRequired(false)
+      )
   );
 
 export async function handleConfigCommand(
@@ -178,6 +214,46 @@ export async function handleConfigCommand(
       content: `✅ Server reporting timezone updated to **\`${validatedZone}\`** (\`${tzLabel}\`)!\nAll PDF, Excel, CSV, and embed reports will now display timestamps dynamically in this timezone.`,
       flags: MessageFlags.Ephemeral,
     });
+    return;
+  }
+
+  if (subcommand === 'auto_report') {
+    if (!isManager) {
+      await interaction.reply({
+        content: getManagementDenialMessage(settings),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const enabled = interaction.options.getBoolean('enabled', true);
+    const format = (interaction.options.getString('format') || settings.autoReportConfig?.format || 'excel') as 'excel' | 'pdf' | 'csv' | 'embed';
+    const channel = interaction.options.getChannel('channel');
+    const includePayroll = interaction.options.getBoolean('include_payroll') ?? (settings.autoReportConfig?.includePayroll ?? true);
+
+    const channelId = channel ? channel.id : (settings.autoReportConfig?.channelId || settings.announceChannelId || null);
+
+    const updatedConfig = {
+      enabled,
+      format,
+      channelId,
+      includePayroll,
+    };
+
+    await settingsRepo.setAutoReportConfig(guild.id, updatedConfig);
+
+    if (enabled) {
+      const channelDisplay = channelId ? `<#${channelId}>` : 'configured announcement channel';
+      await interaction.reply({
+        content: `✅ Automated monthly report delivery is now **Enabled**!\n• **Schedule**: 1st of every month at 00:00 (\`${settings.timezone}\`)\n• **Destination**: ${channelDisplay}\n• **Format**: \`${format.toUpperCase()}\`\n• **Consolidated Payroll**: ${includePayroll ? '✅ Included' : '❌ Excluded'}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    } else {
+      await interaction.reply({
+        content: '✅ Automated monthly report delivery is now **Disabled**. Reports will only be generated manually on demand.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
     return;
   }
 
@@ -227,6 +303,13 @@ export async function handleConfigCommand(
         {
           name: '💼 Contractor Rates',
           value: ratesField,
+          inline: true,
+        },
+        {
+          name: '📬 Automated Monthly Report',
+          value: settings.autoReportConfig?.enabled
+            ? `✅ Enabled (\`${settings.autoReportConfig.format?.toUpperCase() || 'EXCEL'}\` to <#${settings.autoReportConfig.channelId || settings.announceChannelId}>)`
+            : '❌ Disabled (Manual reports only)',
           inline: true,
         },
         {
